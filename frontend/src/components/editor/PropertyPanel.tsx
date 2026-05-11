@@ -10,7 +10,7 @@ import {
   useFloorplanStore,
 } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
-import { getPreset } from '@/data/roomPresets'
+import { ROOM_PRESETS, getPreset } from '@/data/roomPresets'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
 import { listSashCatalog } from '@/data/sashCatalog'
 import type { WallType, WindowType } from '@/types'
@@ -46,9 +46,10 @@ export function PropertyPanel() {
 
   if (selected.kind === 'room') {
     const room = floor?.rooms.find((r) => r.id === selected.id)
-    if (room == null || room.shape.kind !== 'rect') {
+    if (room == null) {
       return <EmptyPanel message="選択された部屋が見つかりません" />
     }
+    // §M38: polygon 部屋もパネルを開く (用途変更 / 削除 ができる)
     return <RoomProperties roomId={room.id} />
   }
 
@@ -104,15 +105,18 @@ function EmptyPanel({ message }: { message: string }) {
 // ============================================================================
 
 function RoomProperties({ roomId }: { roomId: string }) {
-  const room = useFloorplanStore((s) => s.floorplan.floors[0]?.rooms.find((r) => r.id === roomId))
+  const room = useFloorplanStore((s) =>
+    s.floorplan.floors[s.activeFloorIndex]?.rooms.find((r) => r.id === roomId),
+  )
   const resizeRoom = useFloorplanStore((s) => s.resizeRoom)
   const rotateRoom = useFloorplanStore((s) => s.rotateRoom)
   const removeRoom = useFloorplanStore((s) => s.removeRoom)
+  const updateRoomPreset = useFloorplanStore((s) => s.updateRoomPreset)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
-  if (room == null || room.shape.kind !== 'rect') return null
+  if (room == null) return null
   const preset = getPreset(room.presetId)
-  const { x, y, w, h } = room.shape
+  const isRect = room.shape.kind === 'rect'
 
   function handleResize(field: 'w' | 'h', value: number) {
     if (room == null || room.shape.kind !== 'rect') return
@@ -127,13 +131,28 @@ function RoomProperties({ roomId }: { roomId: string }) {
     clearSelection()
   }
 
+  // rect 部屋のみ寸法表示。polygon は AABB 概算と頂点数だけ表示
+  const rect = room.shape.kind === 'rect' ? room.shape : null
+
   return (
     <section className="editor-properties" data-testid="property-panel">
       <div className="property-section">
         <h3>基本</h3>
         <div className="property-row">
-          <span className="label">プリセット</span>
-          <span className="value">{preset?.displayName ?? room.presetId}</span>
+          <span className="label">用途 (preset)</span>
+          {/* §M38: select で用途を変更可能 */}
+          <select
+            value={room.presetId}
+            onChange={(e) => updateRoomPreset(room.id, e.target.value)}
+            data-testid="room-preset-select"
+            aria-label="部屋の用途 (preset)"
+          >
+            {ROOM_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.displayName}
+              </option>
+            ))}
+          </select>
         </div>
         {preset != null && (
           <>
@@ -149,43 +168,60 @@ function RoomProperties({ roomId }: { roomId: string }) {
         )}
       </div>
 
-      <div className="property-section">
-        <h3>位置 (mm)</h3>
-        <div className="property-row"><span className="label">x</span><span className="value">{x}</span></div>
-        <div className="property-row"><span className="label">y</span><span className="value">{y}</span></div>
-      </div>
+      {rect != null && (
+        <>
+          <div className="property-section">
+            <h3>位置 (mm)</h3>
+            <div className="property-row"><span className="label">x</span><span className="value">{rect.x}</span></div>
+            <div className="property-row"><span className="label">y</span><span className="value">{rect.y}</span></div>
+          </div>
 
-      <div className="property-section">
-        <h3>寸法 (mm)</h3>
-        <div className="property-row">
-          <span className="label">幅</span>
-          <input
-            type="number"
-            value={w}
-            step={910}
-            min={500}
-            onChange={(e) => handleResize('w', Number(e.target.value))}
-            data-testid="prop-width"
-            aria-label="部屋の幅 (mm)"
-          />
+          <div className="property-section">
+            <h3>寸法 (mm)</h3>
+            <div className="property-row">
+              <span className="label">幅</span>
+              <input
+                type="number"
+                value={rect.w}
+                step={910}
+                min={500}
+                onChange={(e) => handleResize('w', Number(e.target.value))}
+                data-testid="prop-width"
+                aria-label="部屋の幅 (mm)"
+              />
+            </div>
+            <div className="property-row">
+              <span className="label">奥行</span>
+              <input
+                type="number"
+                value={rect.h}
+                step={910}
+                min={500}
+                onChange={(e) => handleResize('h', Number(e.target.value))}
+                data-testid="prop-height"
+                aria-label="部屋の奥行 (mm)"
+              />
+            </div>
+            <div className="property-row">
+              <span className="label">面積 (㎡)</span>
+              <span className="value">{((rect.w * rect.h) / 1_000_000).toFixed(2)}</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {!isRect && room.shape.kind === 'polygon' && (
+        <div className="property-section">
+          <h3>polygon</h3>
+          <div className="property-row">
+            <span className="label">頂点数</span>
+            <span className="value">{room.shape.points.length}</span>
+          </div>
+          <div className="property-row" style={{ color: 'var(--gray-500)', fontSize: 11 }}>
+            <span>頂点ハンドル (青■) をドラッグして形を変えられます</span>
+          </div>
         </div>
-        <div className="property-row">
-          <span className="label">奥行</span>
-          <input
-            type="number"
-            value={h}
-            step={910}
-            min={500}
-            onChange={(e) => handleResize('h', Number(e.target.value))}
-            data-testid="prop-height"
-            aria-label="部屋の奥行 (mm)"
-          />
-        </div>
-        <div className="property-row">
-          <span className="label">面積 (㎡)</span>
-          <span className="value">{((w * h) / 1_000_000).toFixed(2)}</span>
-        </div>
-      </div>
+      )}
 
       <div className="property-section">
         <h3>回転 (Phase 1: 90° 単位)</h3>
@@ -196,6 +232,8 @@ function RoomProperties({ roomId }: { roomId: string }) {
               type="button"
               aria-pressed={room.rotation === deg}
               onClick={() => rotateRoom(room.id, deg)}
+              disabled={!isRect}
+              title={isRect ? '' : 'polygon の回転は未対応'}
             >
               {deg}°
             </button>

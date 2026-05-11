@@ -28,6 +28,7 @@ import type {
 } from '@/types'
 import { defaultFurnitureForPreset, getCatalogEntry } from '@/data/furnitureCatalog'
 import { getSashEntry } from '@/data/sashCatalog'
+import { getPreset } from '@/data/roomPresets'
 import { CURRENT_SCHEMA_VERSION } from '@/data/migrate'
 import { overlapsAny } from '@/core/collision'
 import { addAutoDoorSuppression } from '@/core/doors'
@@ -149,6 +150,21 @@ export type FloorplanState = {
     roomId: string,
     next: { x: number; y: number; w: number; h: number },
   ) => boolean
+  /**
+   * §M37 Phase 3 v0.3: polygon 部屋の特定頂点を新位置に動かす。
+   * 軸並行を維持するため、隣接 2 頂点のうち「同じ軸を共有する側」だけを 1 hop 補正する。
+   * 重なり判定で拒否時は false。
+   */
+  moveRoomVertex: (
+    roomId: string,
+    vertexIdx: number,
+    newPos: readonly [number, number],
+  ) => boolean
+  /**
+   * §M38 Phase 3 v0.3: 部屋の用途 (presetId) を変更する。
+   * 形状や壁は変えない (compliance だけ次回 schedule で評価し直される)。
+   */
+  updateRoomPreset: (roomId: string, presetId: string) => boolean
 
   // §M30 自立壁 (部屋に紐づかない手書きの壁)
   /** 自立壁を 1 本追加。from→to は mm、軸並行を期待 */
@@ -500,6 +516,82 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const nextRooms = floor.rooms.map((r) => (r.id === roomId ? nextRoom : r))
     const nextFloor = recomputeFloor(floor, nextRooms)
     set({ floorplan: replaceFloor(state.floorplan, nextFloor, floorIdx) })
+    return true
+  },
+
+  moveRoomVertex: (roomId, vertexIdx, newPos) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return false
+    const room = floor.rooms.find((r) => r.id === roomId)
+    if (room == null || room.shape.kind !== 'polygon') return false
+    const pts = room.shape.points
+    if (vertexIdx < 0 || vertexIdx >= pts.length) return false
+    const n = pts.length
+    const oldP = pts[vertexIdx]!
+    const newP: readonly [number, number] = [
+      Math.round(newPos[0]),
+      Math.round(newPos[1]),
+    ]
+    if (newP[0] === oldP[0] && newP[1] === oldP[1]) return false
+    const prevIdx = (vertexIdx - 1 + n) % n
+    const nextIdx = (vertexIdx + 1) % n
+    const prev = pts[prevIdx]!
+    const next = pts[nextIdx]!
+    // 隣接エッジの軸を判定 (horizontal: 同 y, vertical: 同 x)
+    const prevHorizontal = prev[1] === oldP[1]
+    const nextHorizontal = oldP[1] === next[1]
+    // 1 hop 補正
+    const newPrev: readonly [number, number] = prevHorizontal
+      ? [prev[0], newP[1]] // horizontal: 隣の y を新 y に揃える
+      : [newP[0], prev[1]] // vertical: 隣の x を新 x に揃える
+    const newNext: readonly [number, number] = nextHorizontal
+      ? [next[0], newP[1]]
+      : [newP[0], next[1]]
+    const nextPoints = pts.map((p, i) => {
+      if (i === vertexIdx) return newP
+      if (i === prevIdx) return newPrev
+      if (i === nextIdx) return newNext
+      return p
+    })
+    // 最小寸法チェック (AABB の幅・高さ ≥ 500mm)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const [px, py] of nextPoints) {
+      if (px < minX) minX = px
+      if (py < minY) minY = py
+      if (px > maxX) maxX = px
+      if (py > maxY) maxY = py
+    }
+    if (maxX - minX < 500 || maxY - minY < 500) return false
+    const nextRoom: Room = {
+      ...room,
+      shape: { ...room.shape, points: nextPoints },
+    }
+    if (overlapsAny(nextRoom, floor.rooms.filter((r) => r.id !== roomId))) {
+      return false
+    }
+    snapshotForHistory(state.floorplan)
+    const nextRooms = floor.rooms.map((r) => (r.id === roomId ? nextRoom : r))
+    const nextFloor = recomputeFloor(floor, nextRooms)
+    set({ floorplan: replaceFloor(state.floorplan, nextFloor, floorIdx) })
+    return true
+  },
+
+  updateRoomPreset: (roomId, presetId) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return false
+    if (getPreset(presetId) == null) return false
+    const room = floor.rooms.find((r) => r.id === roomId)
+    if (room == null) return false
+    if (room.presetId === presetId) return false
+    snapshotForHistory(state.floorplan)
+    const nextRooms = floor.rooms.map((r) =>
+      r.id === roomId ? { ...r, presetId } : r,
+    )
+    set({ floorplan: replaceFloor(state.floorplan, { ...floor, rooms: nextRooms }, floorIdx) })
     return true
   },
 

@@ -58,13 +58,12 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
       }}
       onDragEnd={(e) => {
         const grp = e.target
-        // px → mm に戻し、グリッドにスナップ
-        const dropX = grp.x() / scale
-        const dropY = grp.y() / scale
-        const snappedX = Math.round(dropX / gridSize) * gridSize
-        const snappedY = Math.round(dropY / gridSize) * gridSize
-        moveFurniture(furniture.id, [snappedX, snappedY])
-        grp.position({ x: snappedX * scale, y: snappedY * scale })
+        // §M40 v0.3: グリッドスナップを廃止し、1mm 単位で確定 (家具は任意位置に置ける)
+        const dropX = Math.round(grp.x() / scale)
+        const dropY = Math.round(grp.y() / scale)
+        moveFurniture(furniture.id, [dropX, dropY])
+        grp.position({ x: dropX * scale, y: dropY * scale })
+        void gridSize
       }}
     >
       {/* 外枠 + 名称 */}

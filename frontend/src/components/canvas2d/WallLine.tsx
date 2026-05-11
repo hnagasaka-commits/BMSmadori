@@ -38,9 +38,41 @@ export function WallLine({ wall, scale }: Props) {
     return null
   }
 
+  /**
+   * §M35: クリック点を壁 (from→to) のベクトルに正射影して positionRatio (0..1) を返す。
+   * - 壁外をクリックしても 0..1 にクランプ
+   * - 開口幅 (defaultW) が壁長を超えそうな場合は端から +halfW で内側に詰める
+   */
+  function clickToPositionRatio(
+    e: KonvaEventObject<MouseEvent | TouchEvent>,
+    defaultWmm: number,
+  ): number {
+    const stage = e.target.getStage()
+    if (stage == null) return 0.5
+    const ptr = stage.getRelativePointerPosition()
+    if (ptr == null) return 0.5
+    const worldX = ptr.x / scale
+    const worldY = ptr.y / scale
+    const dx = wall.to[0] - wall.from[0]
+    const dy = wall.to[1] - wall.from[1]
+    const len2 = dx * dx + dy * dy
+    if (len2 === 0) return 0.5
+    const t =
+      ((worldX - wall.from[0]) * dx + (worldY - wall.from[1]) * dy) / len2
+    const wallLen = Math.sqrt(len2)
+    // 開口が壁の端からはみ出さないようクランプ
+    const half = defaultWmm / 2
+    const minT = wallLen > 0 ? Math.min(0.5, half / wallLen) : 0
+    const maxT = 1 - minT
+    return Math.max(minT, Math.min(maxT, t))
+  }
+
   function handleClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
     if (tool === 'window') {
-      const winId = addWindow({ wallId: wall.id })
+      const winId = addWindow({
+        wallId: wall.id,
+        positionRatio: clickToPositionRatio(e, 1690),
+      })
       if (winId != null) {
         select({ kind: 'window', id: winId })
         setTool('select')
@@ -49,8 +81,11 @@ export function WallLine({ wall, scale }: Props) {
       return
     }
     if (tool === 'door') {
-      // §M24: 壁の中央に幅 800mm の片開きドアを配置
-      const dId = addDoor({ wallId: wall.id })
+      // §M35: クリック点に近い位置にドアを置く
+      const dId = addDoor({
+        wallId: wall.id,
+        positionRatio: clickToPositionRatio(e, 800),
+      })
       if (dId != null) {
         select({ kind: 'door', id: dId })
         setTool('select')

@@ -19,6 +19,7 @@ import { Rect } from 'react-konva'
 import type Konva from 'konva'
 import type { Room } from '@/types'
 import { useFloorplanStore } from '@/store/floorplanStore'
+import { polygonVertices } from '@/core/geometry'
 
 const HANDLE_SIZE_PX = 10
 const MIN_DIMENSION_MM = 500
@@ -33,6 +34,52 @@ type Props = {
 
 export function RoomResizeHandles({ room, scale, gridSize }: Props) {
   const resizeRoom = useFloorplanStore((s) => s.resizeRoom)
+  const moveRoomVertex = useFloorplanStore((s) => s.moveRoomVertex)
+
+  // §M37: polygon 部屋は各頂点に独立した青ハンドルを描画 (1 hop 補正で軸並行を維持)
+  if (room.shape.kind === 'polygon') {
+    const verts = polygonVertices(room.shape, room.rotation)
+    return (
+      <>
+        {verts.map((v, i) => (
+          <Rect
+            key={`poly-${i}`}
+            x={v[0] * scale}
+            y={v[1] * scale}
+            width={HANDLE_SIZE_PX}
+            height={HANDLE_SIZE_PX}
+            offsetX={HANDLE_SIZE_PX / 2}
+            offsetY={HANDLE_SIZE_PX / 2}
+            fill="white"
+            stroke="#3b82f6"
+            strokeWidth={1.5}
+            draggable
+            data-testid={`room-vertex-${i}`}
+            onDragEnd={(e) => {
+              const nx = Math.round(e.target.x() / scale / gridSize) * gridSize
+              const ny = Math.round(e.target.y() / scale / gridSize) * gridSize
+              const ok = moveRoomVertex(room.id, i, [nx, ny])
+              if (!ok) e.target.position({ x: v[0] * scale, y: v[1] * scale })
+            }}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage()
+              if (stage != null) {
+                const c = stage.container() as unknown as HTMLDivElement | null
+                if (c != null) c.style.cursor = 'move'
+              }
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage()
+              if (stage != null) {
+                const c = stage.container() as unknown as HTMLDivElement | null
+                if (c != null) c.style.cursor = ''
+              }
+            }}
+          />
+        ))}
+      </>
+    )
+  }
 
   if (room.shape.kind !== 'rect') return null
   // 回転が 0 / 180 のときのみ AABB = shape.{x,y,w,h} がそのまま使える

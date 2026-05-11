@@ -242,6 +242,331 @@ const ENTRIES: FurnitureCatalogEntry[] = [
       },
     ],
   },
+  // ---------------------------------------------------------------------------
+  // §M39 v0.3 拡充: ソファ追加 / 椅子系 / 大型ベッド / 収納 / 家電 / 照明
+  // ---------------------------------------------------------------------------
+  {
+    id: 'sofa-l-shape',
+    displayName: 'L 字ソファ',
+    minRoom: { w: 2500, h: 2200 },
+    pieces: [
+      {
+        id: 'body-h',
+        position: [0, 380, 700],
+        size: [2400, 760, 850],
+        shape: 'box',
+        material: { color: '#4f6e7c', roughness: 0.9, metalness: 0.02 },
+      },
+      {
+        id: 'body-v',
+        position: [-775, 380, -100],
+        size: [850, 760, 1600],
+        shape: 'box',
+        material: { color: '#4f6e7c', roughness: 0.9, metalness: 0.02 },
+      },
+    ],
+  },
+  {
+    id: 'armchair',
+    displayName: '一人掛けアームチェア',
+    minRoom: { w: 800, h: 800 },
+    pieces: [
+      {
+        id: 'seat',
+        position: [0, 380, 0],
+        size: [800, 760, 800],
+        shape: 'box',
+        material: { color: '#8a6b50', roughness: 0.85, metalness: 0.02 },
+      },
+    ],
+  },
+  {
+    id: 'side-table',
+    displayName: 'サイドテーブル',
+    minRoom: { w: 450, h: 450 },
+    pieces: [
+      {
+        id: 'top',
+        position: [0, 280, 0],
+        size: [450, 560, 450],
+        shape: 'box',
+        material: { color: '#6e4f33', roughness: 0.6, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'dining-table-6',
+    displayName: 'ダイニングテーブル (6 人)',
+    minRoom: { w: 1800, h: 900 },
+    pieces: [
+      {
+        id: 'top',
+        position: [0, 360, 0],
+        size: [1800, 720, 900],
+        shape: 'box',
+        material: { color: '#8b5a2b', roughness: 0.55, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'tv-stand-large',
+    displayName: 'TV スタンド (大)',
+    minRoom: { w: 2000, h: 400 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 350, 0],
+        size: [2000, 700, 400],
+        shape: 'box',
+        material: { color: '#1f1f1f', roughness: 0.5, metalness: 0.15 },
+      },
+    ],
+  },
+  {
+    id: 'bed-single',
+    displayName: 'シングルベッド',
+    minRoom: { w: 1000, h: 2000 },
+    pieces: [
+      {
+        id: 'mattress',
+        position: [0, 250, 0],
+        size: [1000, 500, 2000],
+        shape: 'box',
+        material: { color: '#cdd5dd', roughness: 0.95, metalness: 0.0 },
+      },
+      {
+        id: 'pillow',
+        position: [0, 530, -820],
+        size: [850, 100, 350],
+        shape: 'box',
+        material: { color: '#ffffff', roughness: 1.0, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'bed-double',
+    displayName: 'ダブルベッド',
+    minRoom: { w: 1400, h: 2000 },
+    pieces: [
+      {
+        id: 'mattress',
+        position: [0, 250, 0],
+        size: [1400, 500, 2000],
+        shape: 'box',
+        material: { color: '#cdd5dd', roughness: 0.95, metalness: 0.0 },
+      },
+      {
+        id: 'pillow',
+        position: [0, 530, -820],
+        size: [1200, 100, 350],
+        shape: 'box',
+        material: { color: '#ffffff', roughness: 1.0, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'bed-queen',
+    displayName: 'クイーンベッド',
+    minRoom: { w: 1600, h: 2050 },
+    pieces: [
+      {
+        id: 'mattress',
+        position: [0, 250, 0],
+        size: [1600, 500, 2050],
+        shape: 'box',
+        material: { color: '#cdd5dd', roughness: 0.95, metalness: 0.0 },
+      },
+      {
+        id: 'pillow',
+        position: [0, 530, -850],
+        size: [1450, 100, 350],
+        shape: 'box',
+        material: { color: '#ffffff', roughness: 1.0, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'dresser',
+    displayName: 'ドレッサー',
+    minRoom: { w: 1000, h: 450 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 400, 0],
+        size: [1000, 800, 450],
+        shape: 'box',
+        material: { color: '#7a5a3f', roughness: 0.6, metalness: 0.05 },
+      },
+      {
+        id: 'mirror',
+        position: [0, 1300, -200],
+        size: [600, 700, 30],
+        shape: 'box',
+        material: { color: '#cce0ec', roughness: 0.05, metalness: 0.7 },
+      },
+    ],
+  },
+  {
+    id: 'refrigerator',
+    displayName: '冷蔵庫',
+    minRoom: { w: 600, h: 650 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 900, 0],
+        size: [600, 1800, 650],
+        shape: 'box',
+        material: { color: '#d0d3d6', roughness: 0.4, metalness: 0.5 },
+      },
+    ],
+  },
+  {
+    id: 'dining-cabinet',
+    displayName: 'カップボード',
+    minRoom: { w: 1200, h: 450 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 900, 0],
+        size: [1200, 1800, 450],
+        shape: 'box',
+        material: { color: '#dcd3c4', roughness: 0.55, metalness: 0.05 },
+      },
+    ],
+  },
+  {
+    id: 'washing-machine',
+    displayName: '洗濯機',
+    minRoom: { w: 700, h: 700 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 500, 0],
+        size: [650, 1000, 650],
+        shape: 'box',
+        material: { color: '#ececec', roughness: 0.5, metalness: 0.2 },
+      },
+    ],
+  },
+  {
+    id: 'closet-walk-in',
+    displayName: 'ウォークインクローゼット (棚)',
+    minRoom: { w: 1500, h: 600 },
+    pieces: [
+      {
+        id: 'shelf',
+        position: [0, 1100, 0],
+        size: [1500, 2200, 600],
+        shape: 'box',
+        material: { color: '#a98763', roughness: 0.65, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'bookshelf',
+    displayName: '本棚',
+    minRoom: { w: 900, h: 300 },
+    pieces: [
+      {
+        id: 'shelf',
+        position: [0, 950, 0],
+        size: [900, 1900, 300],
+        shape: 'box',
+        material: { color: '#6e4f33', roughness: 0.6, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'desk-work',
+    displayName: 'ワークデスク',
+    minRoom: { w: 1200, h: 600 },
+    pieces: [
+      {
+        id: 'top',
+        position: [0, 360, 0],
+        size: [1200, 720, 600],
+        shape: 'box',
+        material: { color: '#dcd3c4', roughness: 0.55, metalness: 0.05 },
+      },
+      {
+        id: 'chair',
+        position: [0, 230, 350],
+        size: [500, 460, 500],
+        shape: 'box',
+        material: { color: '#3c3c3c', roughness: 0.7, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'pendant-light',
+    displayName: 'ペンダントライト',
+    minRoom: { w: 300, h: 300 },
+    pieces: [
+      {
+        id: 'shade',
+        position: [0, 2100, 0],
+        size: [300, 120, 300],
+        shape: 'cylinder',
+        material: { color: '#fff2b8', roughness: 0.3, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'floor-lamp',
+    displayName: 'フロアランプ',
+    minRoom: { w: 400, h: 400 },
+    pieces: [
+      {
+        id: 'stand',
+        position: [0, 900, 0],
+        size: [80, 1800, 80],
+        shape: 'cylinder',
+        material: { color: '#1f1f1f', roughness: 0.5, metalness: 0.6 },
+      },
+      {
+        id: 'shade',
+        position: [0, 1750, 0],
+        size: [400, 300, 400],
+        shape: 'cylinder',
+        material: { color: '#fff2b8', roughness: 0.3, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'plant-large',
+    displayName: '観葉植物 (大)',
+    minRoom: { w: 500, h: 500 },
+    pieces: [
+      {
+        id: 'pot',
+        position: [0, 200, 0],
+        size: [400, 400, 400],
+        shape: 'cylinder',
+        material: { color: '#8a6b50', roughness: 0.8, metalness: 0.0 },
+      },
+      {
+        id: 'leaves',
+        position: [0, 1100, 0],
+        size: [700, 1400, 700],
+        shape: 'cylinder',
+        material: { color: '#3c6b41', roughness: 0.9, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'rug-3x2',
+    displayName: 'ラグ (3×2m)',
+    minRoom: { w: 2000, h: 3000 },
+    pieces: [
+      {
+        id: 'rug',
+        position: [0, 5, 0],
+        size: [3000, 10, 2000],
+        shape: 'box',
+        material: { color: '#c8b89b', roughness: 1.0, metalness: 0.0 },
+      },
+    ],
+  },
 ]
 
 const BY_ID = new Map(ENTRIES.map((e) => [e.id, e]))

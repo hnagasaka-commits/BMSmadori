@@ -13,6 +13,8 @@ import type { Room } from '@/types'
 import { useEditorStore } from '@/store/editorStore'
 import { useFloorplanStore } from '@/store/floorplanStore'
 import { polygonVertices, shapeAabb } from '@/core/geometry'
+import { snapRoomDrop, type AabbMm } from '@/core/snap'
+import { selectRooms } from '@/store/floorplanStore'
 
 type Props = {
   room: Room
@@ -29,6 +31,7 @@ export function RoomShape({ room, scale, gridSize }: Props) {
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
   const setDraggingRoomId = useEditorStore((s) => s.setDraggingRoomId)
   const moveRoom = useFloorplanStore((s) => s.moveRoom)
+  const otherRooms = useFloorplanStore(selectRooms)
 
   if (room.shape.kind !== 'rect' && room.shape.kind !== 'polygon') return null
 
@@ -55,15 +58,27 @@ export function RoomShape({ room, scale, gridSize }: Props) {
         const grp = e.target
         const dropX = grp.x() / scale
         const dropY = grp.y() / scale
-        const snappedX = Math.round(dropX / gridSize) * gridSize
-        const snappedY = Math.round(dropY / gridSize) * gridSize
-        const dx = snappedX - originX
-        const dy = snappedY - originY
+        // §M36 v0.3: 自由位置 + 角スナップ。dropX/dropY は新しい AABB minX/minY。
+        const dropAabb: AabbMm = {
+          minX: dropX,
+          minY: dropY,
+          maxX: dropX + (aabb.maxX - aabb.minX),
+          maxY: dropY + (aabb.maxY - aabb.minY),
+        }
+        const otherAabbs: AabbMm[] = otherRooms
+          .filter((r) => r.id !== room.id)
+          .map((r) => {
+            const a = shapeAabb(r.shape, r.rotation)
+            return { minX: a.minX, minY: a.minY, maxX: a.maxX, maxY: a.maxY }
+          })
+        const snap = snapRoomDrop(dropAabb, otherAabbs, gridSize)
+        const dx = snap.minX - originX
+        const dy = snap.minY - originY
         const ok = moveRoom(room.id, dx, dy)
         if (!ok) {
           grp.position({ x: originX * scale, y: originY * scale })
         } else {
-          grp.position({ x: snappedX * scale, y: snappedY * scale })
+          grp.position({ x: snap.minX * scale, y: snap.minY * scale })
         }
         setDraggingRoomId(null)
       },

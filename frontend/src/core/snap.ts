@@ -132,6 +132,124 @@ function projectEdgeOntoWall(edge: Segment, wall: Wall): Projection | null {
 // スナップ確定後のオフセット計算
 // ============================================================================
 
+// ============================================================================
+// §M36 部屋移動の角スナップ (v0.3)
+// ============================================================================
+
+/** AABB (mm) */
+export type AabbMm = {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+const CORNER_SNAP_TOLERANCE_MM = 200
+const EDGE_SNAP_TOLERANCE_MM = 200
+
+/**
+ * §6.3 部屋ドロップ位置の最適スナップ計算 (v0.3)。
+ *
+ * 優先順:
+ *  1. 自部屋の 4 隅と他部屋の 4 隅で距離 ≤ 200mm のペアが 1 つ以上 → 最近のペアで自部屋を移動
+ *     (角が「カチッとハマる」)
+ *  2. 自部屋のいずれかの辺 (X / Y) が他部屋の対応軸辺と 200mm 以内に揃う → その軸だけ平行移動
+ *  3. どれも当てはまらなければ gridSize に丸める (旧 grid スナップ)
+ *
+ * 戻り値: スナップ後の (minX, minY) と、どの方式が選ばれたかのデバッグ情報。
+ */
+export type RoomDropSnap = {
+  minX: number
+  minY: number
+  mode: 'corner' | 'edge' | 'grid' | 'none'
+}
+
+export function snapRoomDrop(
+  drop: AabbMm,
+  others: ReadonlyArray<AabbMm>,
+  gridSize: number,
+): RoomDropSnap {
+  const w = drop.maxX - drop.minX
+  const h = drop.maxY - drop.minY
+  // 自部屋の 4 隅 (現在ドロップした位置)
+  const myCorners: Array<readonly [number, number]> = [
+    [drop.minX, drop.minY],
+    [drop.maxX, drop.minY],
+    [drop.maxX, drop.maxY],
+    [drop.minX, drop.maxY],
+  ]
+
+  // 1) 角スナップ
+  let best: { dist: number; dx: number; dy: number } | null = null
+  for (const o of others) {
+    const otherCorners: Array<readonly [number, number]> = [
+      [o.minX, o.minY],
+      [o.maxX, o.minY],
+      [o.maxX, o.maxY],
+      [o.minX, o.maxY],
+    ]
+    for (const m of myCorners) {
+      for (const c of otherCorners) {
+        const dx = c[0] - m[0]
+        const dy = c[1] - m[1]
+        const d = Math.hypot(dx, dy)
+        if (d > CORNER_SNAP_TOLERANCE_MM) continue
+        if (best == null || d < best.dist) best = { dist: d, dx, dy }
+      }
+    }
+  }
+  if (best != null) {
+    return {
+      minX: Math.round(drop.minX + best.dx),
+      minY: Math.round(drop.minY + best.dy),
+      mode: 'corner',
+    }
+  }
+
+  // 2) 辺スナップ (X / Y それぞれ最も近い候補をマージ)
+  let bestX: { dist: number; dx: number } | null = null
+  let bestY: { dist: number; dy: number } | null = null
+  const myXs = [drop.minX, drop.maxX]
+  const myYs = [drop.minY, drop.maxY]
+  for (const o of others) {
+    for (const myX of myXs) {
+      for (const otherX of [o.minX, o.maxX]) {
+        const d = Math.abs(otherX - myX)
+        if (d > EDGE_SNAP_TOLERANCE_MM) continue
+        const dx = otherX - myX
+        if (bestX == null || d < bestX.dist) bestX = { dist: d, dx }
+      }
+    }
+    for (const myY of myYs) {
+      for (const otherY of [o.minY, o.maxY]) {
+        const d = Math.abs(otherY - myY)
+        if (d > EDGE_SNAP_TOLERANCE_MM) continue
+        const dy = otherY - myY
+        if (bestY == null || d < bestY.dist) bestY = { dist: d, dy }
+      }
+    }
+  }
+  if (bestX != null || bestY != null) {
+    return {
+      minX: Math.round(drop.minX + (bestX?.dx ?? 0)),
+      minY: Math.round(drop.minY + (bestY?.dy ?? 0)),
+      mode: 'edge',
+    }
+  }
+
+  // 3) grid スナップ
+  if (gridSize > 0) {
+    return {
+      minX: Math.round(drop.minX / gridSize) * gridSize,
+      minY: Math.round(drop.minY / gridSize) * gridSize,
+      mode: 'grid',
+    }
+  }
+  void w
+  void h
+  return { minX: Math.round(drop.minX), minY: Math.round(drop.minY), mode: 'none' }
+}
+
 /**
  * 候補にスナップしたとき、Room の (x, y) に加算すべきオフセットを返す。
  * 最近候補がなければ null。
