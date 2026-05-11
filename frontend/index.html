@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content Security Policy (§3.7.3)
+      - default-src 'self': 自己オリジン以外をブロック(完全ローカル動作)
+      - img-src 'self' data: blob:: Konva の toDataURL / PNG export 用
+      - style-src 'unsafe-inline': CSS 変数 + framer-motion インライン style 用 (Phase 2 で nonce 化検討)
+      - connect-src 'self': 外部 API 呼び出し禁止(Phase 4 のクラウド同期で限定 URL を開ける)
+      - frame-ancestors 'none' / object-src 'none' / form-action 'none': クリックジャック/オブジェクト埋込防止
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: blob:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'self'; object-src 'none'"
+    />
+    <title>間取りプランナー</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
