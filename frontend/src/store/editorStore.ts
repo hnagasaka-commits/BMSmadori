@@ -118,6 +118,11 @@ export type EditorState = {
    *  - 'shed'  : 片流れ (片側のみ傾斜)
    */
   roofStyle: 'none' | 'flat' | 'gable' | 'shed'
+  /**
+   * §M99 v0.22: 3D で表示する階のインデックス。null なら全階表示 (旧挙動)。
+   * 数値が入ると Canvas3D はその階のみ描画する (他階の壁/床/家具を全て非表示)。
+   */
+  visibleFloorIndex: number | null
   /** §11 Phase 2 / M17: 太陽時 (0..24)。LightingRig が太陽位置に変換 */
   sunHour: number
   /** §11 Phase 2 / M17: 季節。日の出/日の入り時刻と南中高度を決める */
@@ -161,6 +166,8 @@ export type EditorState = {
   exitFpv: () => void
   /** §M97 v0.21: 屋根スタイルを切替 */
   setRoofStyle: (style: 'none' | 'flat' | 'gable' | 'shed') => void
+  /** §M99 v0.22: 3D の表示対象階を設定 (null=全階表示) */
+  setVisibleFloorIndex: (index: number | null) => void
   setSunHour: (hour: number) => void
   setSeason: (season: Season) => void
   enterReadonly: (reason: string) => void
@@ -200,6 +207,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   lightingPreset: 'noon',
   fpvHumanId: null,
   roofStyle: 'none',
+  visibleFloorIndex: null,
   sunHour: 12,
   season: 'spring',
   readonly: false,
@@ -238,6 +246,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   enterFpv: (humanId) => set({ fpvHumanId: humanId }),
   exitFpv: () => set({ fpvHumanId: null }),
   setRoofStyle: (roofStyle) => set({ roofStyle }),
+  setVisibleFloorIndex: (visibleFloorIndex) => set({ visibleFloorIndex }),
   setSunHour: (sunHour) => set({ sunHour: Math.max(0, Math.min(24, sunHour)) }),
   setSeason: (season) => set({ season }),
   enterReadonly: (reason) => set({ readonly: true, readonlyReason: reason }),

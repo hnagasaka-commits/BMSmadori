@@ -48,6 +48,8 @@ export function Canvas3D() {
   const season = useEditorStore((s) => s.season)
   const orientation = useFloorplanStore((s) => s.floorplan.metadata.orientation)
   const clearSelection = useEditorStore((s) => s.clearSelection)
+  // §M99 v0.22: 3D で特定の階だけ表示するインデックス (null=全階)
+  const visibleFloorIndex = useEditorStore((s) => s.visibleFloorIndex)
   /**
    * §11 Phase 3 / M19: 階ごとに SceneSpec を構築して、
    * Y オフセット (= 下層の天井高の累積) を持たせて積み上げる。
@@ -141,20 +143,26 @@ export function Canvas3D() {
             §M19: 階ごとに <group position={[0, yOffsetM, 0]}> でラップし、
             その配下に床/壁/家具を吐く。3 階建てなら 3 つの group がスタックされる。
           */}
-          {stacked.map((s) => (
-            <group
-              key={s.floor.id}
-              position={[0, s.yOffsetMm * MM_TO_M, 0]}
-            >
-              <TexturedScene scene={s.scene} />
-              {/* §M67 v0.11: ドアパネルを独立レイヤーで描画 (wall 描画と完全に分離)。
-                  壁の split 結果に依存しないので、ドアが 3D に出ない不具合を根治する */}
-              <DoorPanelsLayer scene={s.scene} />
-              <Furniture furniture={s.floor.furniture} />
-              {/* §M61 v0.9: 床ごとに人物モデルを描画 (家具と同様にドラッグ移動 + クリック選択) */}
-              <Humans humans={s.floor.humanModels} />
-            </group>
-          ))}
+          {stacked.map((s, idx) => {
+            // §M99 v0.22: 任意の階に絞って表示するモード。null なら全階表示
+            if (visibleFloorIndex !== null && idx !== visibleFloorIndex) return null
+            return (
+              <group
+                key={s.floor.id}
+                position={[0, s.yOffsetMm * MM_TO_M, 0]}
+              >
+                <TexturedScene scene={s.scene} />
+                {/* §M67 v0.11: ドアパネルを独立レイヤーで描画 (wall 描画と完全に分離)。
+                    壁の split 結果に依存しないので、ドアが 3D に出ない不具合を根治する */}
+                <DoorPanelsLayer scene={s.scene} />
+                {/* §M98 v0.22: 階段 (stairs-start) を 3D で立ち上げる */}
+                <StairsLayer stairs={s.scene.stairs} />
+                <Furniture furniture={s.floor.furniture} />
+                {/* §M61 v0.9: 床ごとに人物モデルを描画 (家具と同様にドラッグ移動 + クリック選択) */}
+                <Humans humans={s.floor.humanModels} />
+              </group>
+            )
+          })}
 
           {/* §M97 v0.21: 最上階の天井高に屋根を載せる (style により形状切替) */}
           <RoofMesh stacked={stacked} totalHeightMm={totalHeightMm} />
@@ -650,15 +658,18 @@ function DoorPanel({
     const g = groupRef.current
     if (g == null) return
     if (isSliding) {
+      // §M101 v0.22: g.position.x は three.js のメートル系。base / targetSlideX も
+      // メートルに揃えて lerp する (旧 M95 は mm のまま比較していたためアニメが破綻していた)
+      const baseM = leftMm * MM_TO_M
+      const targetM = baseM + targetSlideX * MM_TO_M
       const current = g.position.x
-      const base = leftMm
-      const diff = base + targetSlideX - current
-      if (Math.abs(diff) < 1) {
-        g.position.x = base + targetSlideX
+      const diff = targetM - current
+      if (Math.abs(diff) < 1e-4) {
+        g.position.x = targetM
         return
       }
-      // スライドは 1m/s 程度で動かす (delta は秒)
-      const step = Math.sign(diff) * Math.min(Math.abs(diff), delta * 1500)
+      // スライドは 約 1.5 m/s で動かす (典型的引き戸の操作速度)
+      const step = Math.sign(diff) * Math.min(Math.abs(diff), delta * 1.5)
       g.position.x = current + step
       g.rotation.y = 0
       return
@@ -764,6 +775,69 @@ function WallsWithOpenings({
 }
 
 /**
+ * §M98 v0.22: 階段 (stairs-start) を 3D で立ち上げる。
+ *
+ *  - 階段の踏面長 (tread): aabb の昇り方向の長さ
+ *  - 踏面幅 (going): 階段の幅方向の AABB
+ *  - 蹴上 (riser): ceilingHeight / steps
+ *  - 段数: 17 段固定 (一般住宅標準) または rise / 200mm を切り上げ
+ *  - 各段は薄い箱として積み上げ。下から (0, 0) → (0, rise) まで
+ */
+function StairsLayer({ stairs }: { stairs: import('@/core/three/floorplanToScene').Stairs[] }) {
+  return (
+    <>
+      {stairs.map((s) => {
+        const length =
+          s.direction === '+x' || s.direction === '-x'
+            ? s.aabb.maxX - s.aabb.minX
+            : s.aabb.maxZ - s.aabb.minZ
+        const width =
+          s.direction === '+x' || s.direction === '-x'
+            ? s.aabb.maxZ - s.aabb.minZ
+            : s.aabb.maxX - s.aabb.minX
+        if (length < 100 || width < 100) return null
+        const steps = Math.max(12, Math.ceil(s.rise / 200))
+        const riser = s.rise / steps
+        const tread = length / steps
+        const cx = (s.aabb.minX + s.aabb.maxX) / 2
+        const cz = (s.aabb.minZ + s.aabb.maxZ) / 2
+        return (
+          <group key={s.id}>
+            {Array.from({ length: steps }).map((_, i) => {
+              // 各段の中心 (世界 mm)
+              let stepX = cx
+              let stepZ = cz
+              const stepY = (i * riser + riser / 2) * MM_TO_M
+              const offset = -length / 2 + tread / 2 + i * tread
+              if (s.direction === '+x') stepX = s.aabb.minX + tread / 2 + i * tread
+              else if (s.direction === '-x') stepX = s.aabb.maxX - tread / 2 - i * tread
+              else if (s.direction === '+z') stepZ = s.aabb.minZ + tread / 2 + i * tread
+              else stepZ = s.aabb.maxZ - tread / 2 - i * tread
+              void offset
+              const stepW =
+                s.direction === '+x' || s.direction === '-x' ? tread : width
+              const stepD =
+                s.direction === '+x' || s.direction === '-x' ? width : tread
+              return (
+                <mesh
+                  key={i}
+                  position={[stepX * MM_TO_M, stepY, stepZ * MM_TO_M]}
+                  castShadow
+                  receiveShadow
+                >
+                  <boxGeometry args={[stepW * MM_TO_M, riser * MM_TO_M, stepD * MM_TO_M]} />
+                  <meshStandardMaterial color="#a98765" roughness={0.65} metalness={0.0} />
+                </mesh>
+              )
+            })}
+          </group>
+        )
+      })}
+    </>
+  )
+}
+
+/**
  * §M97 v0.21: 建物全体に被せる屋根 mesh。
  *
  * - `style === 'none'`: 何も描画しない
@@ -851,28 +925,29 @@ function RoofMesh({
     )
   }
 
-  // gable: 2 枚の傾いた slab を中央で合わせる
-  // 棟方向 ridgeAlongX を考慮して、2 枚の slab を中央線で対称に配置
+  // §M100 v0.22: gable 屋根 — 棟が建物中央で最も高く、両側に下がるよう修正。
+  // 旧 M97 は rotation の符号が反転していて V 字 (中央が低い) になっていた。
+  // 各 slab は「軒〜棟」の長さを持ち、軒側の端が y=0 軒先、棟側の端が y=rise 棟上 になる。
   const slabW = ridgeAlongX ? w : Math.hypot(spanForRise / 2, rise)
   const slabD = ridgeAlongX ? Math.hypot(spanForRise / 2, rise) : d
-  // 各 slab の中心位置 (Y 軸方向) と回転
-  // 簡略化: 2 枚を棟線で接する三角プリズムとして扱う
   if (ridgeAlongX) {
-    // 棟は X 軸方向。Z 方向に左右に傾斜
+    // 棟は X 軸方向。-Z 側と +Z 側に slab を 1 枚ずつ配置し、中央 (z=0) で頂点が出会う
     return (
       <group position={[cx * MM_TO_M, baseY, cz * MM_TO_M]}>
+        {/* -Z 側 slab: -Z 端 (z=-d/2) が y=0 軒、+Z 端 (z=0) が y=rise 棟 */}
         <mesh
           position={[0, rise / 2, -d / 4]}
-          rotation={[pitchRad, 0, 0]}
+          rotation={[-pitchRad, 0, 0]}
           castShadow
           receiveShadow
         >
           <boxGeometry args={[slabW, thickness, slabD]} />
           <meshStandardMaterial color="#6b3a2a" roughness={0.7} metalness={0.05} />
         </mesh>
+        {/* +Z 側 slab: +Z 端 (z=d/2) が軒、-Z 端 (z=0) が棟 */}
         <mesh
           position={[0, rise / 2, d / 4]}
-          rotation={[-pitchRad, 0, 0]}
+          rotation={[pitchRad, 0, 0]}
           castShadow
           receiveShadow
         >
@@ -882,21 +957,23 @@ function RoofMesh({
       </group>
     )
   }
-  // 棟は Z 軸方向。X 方向に左右に傾斜
+  // 棟は Z 軸方向。-X 側と +X 側に slab を配置
   return (
     <group position={[cx * MM_TO_M, baseY, cz * MM_TO_M]}>
+      {/* -X 側 slab: -X 端 (x=-w/2) が軒、+X 端 (x=0) が棟 */}
       <mesh
         position={[-w / 4, rise / 2, 0]}
-        rotation={[0, 0, -pitchRad]}
+        rotation={[0, 0, pitchRad]}
         castShadow
         receiveShadow
       >
         <boxGeometry args={[slabW, thickness, slabD]} />
         <meshStandardMaterial color="#6b3a2a" roughness={0.7} metalness={0.05} />
       </mesh>
+      {/* +X 側 slab: +X 端 (x=w/2) が軒、-X 端 (x=0) が棟 */}
       <mesh
         position={[w / 4, rise / 2, 0]}
-        rotation={[0, 0, pitchRad]}
+        rotation={[0, 0, -pitchRad]}
         castShadow
         receiveShadow
       >
@@ -1380,6 +1457,9 @@ function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
   const select = useEditorStore((s) => s.select)
   const roofStyle = useEditorStore((s) => s.roofStyle)
   const setRoofStyle = useEditorStore((s) => s.setRoofStyle)
+  const visibleFloorIndex = useEditorStore((s) => s.visibleFloorIndex)
+  const setVisibleFloorIndex = useEditorStore((s) => s.setVisibleFloorIndex)
+  const floors = useFloorplanStore((s) => s.floorplan.floors)
   const roofOptions: Array<{ id: typeof roofStyle; label: string }> = [
     { id: 'none', label: '無し' },
     { id: 'flat', label: '陸屋根' },
@@ -1450,6 +1530,53 @@ function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
           ))}
         </div>
       </div>
+      {/* §M99 v0.22: 複数階あるときの「この階だけ表示」セレクタ。floors.length > 1 のときだけ出す */}
+      {floors.length > 1 && (
+        <div data-testid="floor-visibility-toolbar">
+          <div style={{ fontSize: 11, marginBottom: 4, color: 'rgba(255,255,255,0.7)' }}>表示階</div>
+          <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setVisibleFloorIndex(null)}
+              aria-pressed={visibleFloorIndex === null}
+              data-testid="floor-visibility-all"
+              style={{
+                border: 'none',
+                background:
+                  visibleFloorIndex === null ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: 11,
+              }}
+            >
+              全階
+            </button>
+            {floors.map((f, i) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setVisibleFloorIndex(i)}
+                aria-pressed={visibleFloorIndex === i}
+                data-testid={`floor-visibility-${i}`}
+                style={{
+                  border: 'none',
+                  background:
+                    visibleFloorIndex === i ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 11,
+                }}
+              >
+                {f.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

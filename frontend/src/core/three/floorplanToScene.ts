@@ -88,12 +88,27 @@ export type Opening = {
   doorType?: 'single-swing' | 'sliding' | 'other'
 }
 
+/**
+ * §M98 v0.22: 階段 (3D 用)。stairs-start プリセット 1 つにつき 1 つ生成される。
+ * - aabb (mm): 階段の床面 AABB (世界座標)
+ * - rise (mm): 1F から 2F への上がり高 (= ceilingHeight 既定)
+ * - direction: 階段の昇り方向。-x / +x / -z / +z のいずれか (AABB 長辺方向に沿う)
+ */
+export type Stairs = {
+  id: string
+  aabb: { minX: number; maxX: number; minZ: number; maxZ: number }
+  rise: number
+  direction: '+x' | '-x' | '+z' | '-z'
+}
+
 export type SceneSpec = {
   /** mm。Phase 2 では Floorplan.metadata.ceilingHeight をそのまま流用 */
   ceilingHeight: number
   floorPlates: FloorPlate[]
   walls: WallBox[]
   openings: Opening[]
+  /** §M98 v0.22: 3D に表示する階段。stairs-start プリセットの部屋から派生 */
+  stairs: Stairs[]
   /** ワールド原点を持ってきたいので、全体の中心 (mm) を返す。R3F 側で OrbitControls.target に渡す */
   center: Vec3
   /** 全体の半径 (mm)。R3F 側で初期カメラ距離を決めるのに使う */
@@ -116,6 +131,8 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
   const floorPlates: FloorPlate[] = []
   if (Array.isArray(floor.rooms)) {
     for (const room of floor.rooms) {
+      // §M98 v0.22: stairs-end (吹き抜け側) は床プレートを描かない → 3D で四角の穴になる
+      if (room.presetId === 'stairs-end') continue
       if (room.shape.kind === 'rect') {
         // §11 Phase 2 / M16: rect は回転後 AABB から箱を作る (90° 量子化前提)。
         // shapeAabb は回転後を返してくれるので AABB のまま投げる。
@@ -206,6 +223,32 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
   ]
   const openings = propagateOpeningsToCoplanarWalls(baseOpenings, sourceWallsForOpenings)
 
+  // §M98 v0.22: stairs-start プリセットの部屋を Stairs[] に変換。
+  // 階段の昇り方向は AABB 長辺方向 + room.rotation で決定する (rect のみ対応)。
+  const stairs: Stairs[] = []
+  if (Array.isArray(floor.rooms)) {
+    for (const room of floor.rooms) {
+      if (room.presetId !== 'stairs-start') continue
+      const aabb = shapeAabb(room.shape, room.rotation)
+      const w = aabb.maxX - aabb.minX
+      const d = aabb.maxY - aabb.minY
+      // 長辺方向に階段が伸びるとみなす。回転 (90° 単位) で +x / -z / -x / +z を選ぶ。
+      // 既定 (rotation=0) は +Z 方向 (図面下方向) に上がる
+      let direction: Stairs['direction']
+      if (w > d) {
+        direction = room.rotation === 180 ? '-x' : '+x'
+      } else {
+        direction = room.rotation === 270 || room.rotation === 90 ? '-z' : '+z'
+      }
+      stairs.push({
+        id: room.id,
+        aabb: { minX: aabb.minX, maxX: aabb.maxX, minZ: aabb.minY, maxZ: aabb.maxY },
+        rise: ceilingHeight,
+        direction,
+      })
+    }
+  }
+
   const { center, radius } = computeBounds(floorPlates, walls, ceilingHeight)
 
   return {
@@ -213,6 +256,7 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
     floorPlates,
     walls,
     openings,
+    stairs,
     center,
     radius,
   }

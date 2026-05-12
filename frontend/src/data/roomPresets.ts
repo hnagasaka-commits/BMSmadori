@@ -163,6 +163,28 @@ export const ROOM_PRESETS: readonly RoomPreset[] = [
     requiresPipeSpace: false,
     preferredWallTypes: ['exterior'],
   },
+  // §M98 v0.22: 階段プリセット。"start" は下階に置いて 3D で階段が立ち上がる、
+  // "end" は上階に置いて床に四角の穴が開く (= 階段の到達口)。
+  {
+    id: 'stairs-start',
+    displayName: '階段 (上り口)',
+    category: 'circulation',
+    defaultSize: { w: 910, h: 2730 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['partition'],
+  },
+  {
+    id: 'stairs-end',
+    displayName: '階段 (吹き抜け)',
+    category: 'circulation',
+    defaultSize: { w: 910, h: 2730 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['partition'],
+  },
 ]
 
 export function getPreset(id: string): RoomPreset | undefined {
