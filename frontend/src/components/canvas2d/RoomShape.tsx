@@ -31,6 +31,7 @@ export function RoomShape({ room, scale, gridSize }: Props) {
   const tool = useEditorStore((s) => s.tool)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
   const setDraggingRoomId = useEditorStore((s) => s.setDraggingRoomId)
+  const setDraggingOffset = useEditorStore((s) => s.setDraggingOffset)
   const resizePreview = useEditorStore((s) => s.resizePreview)
   const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
   const moveRoom = useFloorplanStore((s) => s.moveRoom)
@@ -62,9 +63,19 @@ export function RoomShape({ room, scale, gridSize }: Props) {
         select({ kind: 'room', id: room.id })
       },
       onDragStart: () => {
-        // §M32: ドラッグ中はこの部屋の壁/窓/ドアを非表示にして、Group 内の Rect/Line 輪郭線だけが
-        // 残るようにする (床と壁が一緒に動いて見える)
+        // §M32: ドラッグ中の部屋を draggingRoomId に記録。
+        // §M79 v0.15: 旧仕様は壁を非表示にしていたが、バルコニーのように壁が
+        // 剥き出しの外周だけの部屋では「壁が消えて床だけ動く」ように見えていた。
+        // 代わりに draggingOffset を WallLine が読み取って一緒に動くようにする。
         setDraggingRoomId(room.id)
+        setDraggingOffset({ dx: 0, dy: 0 })
+      },
+      onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => {
+        const grp = e.target
+        // 現在の Konva 位置から元位置までの mm 単位オフセット
+        const dx = grp.x() / scale - originX
+        const dy = grp.y() / scale - originY
+        setDraggingOffset({ dx, dy })
       },
       onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
         const grp = e.target
@@ -93,6 +104,7 @@ export function RoomShape({ room, scale, gridSize }: Props) {
           grp.position({ x: snap.minX * scale, y: snap.minY * scale })
         }
         setDraggingRoomId(null)
+        setDraggingOffset(null)
       },
     }
   }

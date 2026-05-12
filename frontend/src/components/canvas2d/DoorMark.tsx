@@ -26,19 +26,27 @@ export function DoorMark({ door, wall, scale }: Props) {
   const selected = useEditorStore((s) => s.selected)
   const tool = useEditorStore((s) => s.tool)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
+  const draggingOffset = useEditorStore((s) => s.draggingOffset)
   const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
   const interactive = tool === 'select'
   const isSelected = selected?.kind === 'door' && selected.id === door.id
-  // §M32: ドラッグ中の部屋に属する壁のドアは非表示
-  if (draggingRoomId != null && wall.sharedBy.includes(draggingRoomId)) return null
-  // §M41: 共有壁ドラッグ中、影響を受ける部屋の壁のドアも非表示
+  // §M41: 共有壁ドラッグ中、影響を受ける部屋の壁のドアは非表示
   if (sharedWallPreview.length > 0) {
     const ids = new Set(sharedWallPreview.map((p) => p.roomId))
     if (wall.sharedBy.some((id) => ids.has(id))) return null
   }
+  // §M79 v0.15: ドラッグ中の部屋に属するドアは床/壁と一緒に動かす (旧 §M32 の非表示を廃止)
+  const isFollowingDrag =
+    draggingRoomId != null && wall.sharedBy.includes(draggingRoomId) && draggingOffset != null
+  const dragDx = isFollowingDrag ? draggingOffset.dx : 0
+  const dragDy = isFollowingDrag ? draggingOffset.dy : 0
 
-  const [x1, y1] = wall.from
-  const [x2, y2] = wall.to
+  const [wx1, wy1] = wall.from
+  const [wx2, wy2] = wall.to
+  const x1 = wx1 + dragDx
+  const y1 = wy1 + dragDy
+  const x2 = wx2 + dragDx
+  const y2 = wy2 + dragDy
   const wallDx = x2 - x1
   const wallDy = y2 - y1
   const wallLen = Math.hypot(wallDx, wallDy)

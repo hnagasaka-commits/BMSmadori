@@ -997,7 +997,11 @@ function splitWallByOpenings(
     }
   }
 
-  // 1. 各開口の [left, right] を計算 (壁端でクランプ、最小幅 50mm 未満は無効)
+  // 1. 各開口の [left, right] を計算 (壁端でクランプ、最小幅 10mm 未満のみ無効)。
+  // §M80 v0.15: 旧 50mm のしきい値だと、壁端近くにあるドアで「DoorPanelsLayer
+  // は描画するが splitWallByOpenings は穴を切らない」不整合が出てパネルが壁内に
+  // 埋もれて見えなくなっていた。DoorPanelsLayer 側 (>10mm) と同じ閾値に揃えて
+  // 「描画されるドアには必ず穴を空ける」不変条件を保証する。
   type Iv = { left: number; right: number; op: Opening }
   const ivs: Iv[] = []
   for (const op of openings) {
@@ -1005,7 +1009,7 @@ function splitWallByOpenings(
     const half = op.width / 2
     const left = Math.max(-total / 2, center - half)
     const right = Math.min(total / 2, center + half)
-    if (right - left > 50) ivs.push({ left, right, op })
+    if (right - left > 10) ivs.push({ left, right, op })
   }
   if (ivs.length === 0) {
     return {

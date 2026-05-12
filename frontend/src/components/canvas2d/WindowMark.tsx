@@ -19,16 +19,20 @@ export function WindowMark({ window: win, wall, scale }: Props) {
   const selected = useEditorStore((s) => s.selected)
   const tool = useEditorStore((s) => s.tool)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
+  const draggingOffset = useEditorStore((s) => s.draggingOffset)
   const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
   const interactive = tool === 'select'
   const isSelected = selected?.kind === 'window' && selected.id === win.id
-  // §M32: ドラッグ中の部屋に属する壁の窓は非表示
-  if (draggingRoomId != null && wall.sharedBy.includes(draggingRoomId)) return null
-  // §M41: 共有壁ドラッグ中、影響を受ける部屋の壁の窓も非表示
+  // §M41: 共有壁ドラッグ中、影響を受ける部屋の壁の窓は非表示
   if (sharedWallPreview.length > 0) {
     const ids = new Set(sharedWallPreview.map((p) => p.roomId))
     if (wall.sharedBy.some((id) => ids.has(id))) return null
   }
+  // §M79 v0.15: ドラッグ中の部屋に属する窓は床/壁と一緒に動かす (旧 §M32 の非表示を廃止)
+  const isFollowingDrag =
+    draggingRoomId != null && wall.sharedBy.includes(draggingRoomId) && draggingOffset != null
+  const dragDx = isFollowingDrag ? draggingOffset.dx : 0
+  const dragDy = isFollowingDrag ? draggingOffset.dy : 0
 
   // 壁の方向ベクトル (ワールド mm)
   const dx = wall.to[0] - wall.from[0]
@@ -41,9 +45,9 @@ export function WindowMark({ window: win, wall, scale }: Props) {
   const nx = -uy
   const ny = ux
 
-  // 窓の中心点 (ワールド mm)
-  const cx = wall.from[0] + ux * (win.positionRatio * wallLen)
-  const cy = wall.from[1] + uy * (win.positionRatio * wallLen)
+  // 窓の中心点 (ワールド mm)。ドラッグ追従中はオフセットを足す
+  const cx = wall.from[0] + dragDx + ux * (win.positionRatio * wallLen)
+  const cy = wall.from[1] + dragDy + uy * (win.positionRatio * wallLen)
 
   // 壁上の幅
   const halfW = win.width / 2

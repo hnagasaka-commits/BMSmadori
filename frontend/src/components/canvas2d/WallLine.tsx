@@ -30,15 +30,19 @@ export function WallLine({ wall, scale }: Props) {
   const addDoor = useFloorplanStore((s) => s.addDoor)
   const moveSharedWall = useFloorplanStore((s) => s.moveSharedWall)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
+  const draggingOffset = useEditorStore((s) => s.draggingOffset)
   const setSharedWallPreview = useEditorStore((s) => s.setSharedWallPreview)
   const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
 
   const style = STROKE_BY_TYPE[wall.wallType]
   const isSelected = selected?.kind === 'wall' && selected.id === wall.id
-  // §M32: この壁が "ドラッグ中の部屋" に属していたら非表示 (Group 内の輪郭線で置き換わる)
-  if (draggingRoomId != null && wall.sharedBy.includes(draggingRoomId)) {
-    return null
-  }
+  // §M79 v0.15: ドラッグ中の部屋に属する壁は、非表示にせず Room の draggingOffset (mm)
+  // と同じ量だけ平行移動して描画する。これで「床と壁が一緒に動く」見た目になる。
+  // (旧 §M32: return null による非表示。バルコニーでは壁だけ消えるのが不自然だった)
+  const isFollowingDrag =
+    draggingRoomId != null && wall.sharedBy.includes(draggingRoomId) && draggingOffset != null
+  const dragDx = isFollowingDrag ? draggingOffset.dx : 0
+  const dragDy = isFollowingDrag ? draggingOffset.dy : 0
   // §M41: 共有壁ドラッグ中、影響を受ける 2 部屋の他の壁を非表示。
   // ドラッグ中の壁本体 (sharedBy セットがプレビューと完全一致) は表示し続ける (Konva drag で線が動いている)
   if (sharedWallPreview.length > 0) {
@@ -124,10 +128,10 @@ export function WallLine({ wall, scale }: Props) {
   return (
     <Line
       points={[
-        wall.from[0] * scale,
-        wall.from[1] * scale,
-        wall.to[0] * scale,
-        wall.to[1] * scale,
+        (wall.from[0] + dragDx) * scale,
+        (wall.from[1] + dragDy) * scale,
+        (wall.to[0] + dragDx) * scale,
+        (wall.to[1] + dragDy) * scale,
       ]}
       stroke={isSelected ? '#3b82f6' : style.color}
       strokeWidth={isSelected ? style.widthPx + 2 : style.widthPx}
@@ -135,7 +139,8 @@ export function WallLine({ wall, scale }: Props) {
       hitStrokeWidth={Math.max(12, style.widthPx + 8)}
       onClick={handleClick}
       onTap={handleClick}
-      draggable={canResize}
+      // §M79 v0.15: ドラッグ追従中は壁のリサイズドラッグを無効化する (二重ドラッグ防止)
+      draggable={canResize && !isFollowingDrag}
       // ドラッグ軸を法線方向に固定 (壁の主軸方向は動かさない)
       {...(canResize && {
         dragBoundFunc: (pos: { x: number; y: number }) =>

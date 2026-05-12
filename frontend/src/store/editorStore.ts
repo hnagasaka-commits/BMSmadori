@@ -74,6 +74,14 @@ export type EditorState = {
    */
   draggingRoomId: string | null
   /**
+   * §M79 v0.15: ドラッグ中の部屋の移動量 (mm)。
+   * RoomShape の onDragMove で更新し、WallLine 側でこの値を加算して
+   * 「床 (Rect) と壁が一緒に動く」見た目を実現する。
+   * 旧 §M32 は壁を非表示にしていたが、バルコニーのように剥き出しの外周壁を
+   * 持つ部屋では「壁が消えて床だけ動く」ように見えて違和感が強かったため。
+   */
+  draggingOffset: { dx: number; dy: number } | null
+  /**
    * §M41 Phase 3 v0.3: リサイズ中のライブプレビュー (1 部屋向け、角ハンドル用)。
    */
   resizePreview: {
@@ -126,6 +134,8 @@ export type EditorState = {
   setTool: (tool: EditorTool) => void
   /** §M32: 部屋ドラッグの開始/終了マーカー (壁プレビューと同期) */
   setDraggingRoomId: (id: string | null) => void
+  /** §M79 v0.15: 部屋ドラッグ中のオフセット (mm)。WallLine が壁を追従させるのに使う */
+  setDraggingOffset: (offset: { dx: number; dy: number } | null) => void
   /** §M41: リサイズ中のプレビュー寸法を設定 (null でクリア) */
   setResizePreview: (preview: EditorState['resizePreview']) => void
   /** §M41: 共有壁ドラッグ中の 2 部屋プレビューを設定 ([] でクリア) */
@@ -173,6 +183,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   tool: 'select',
   drawing: null,
   draggingRoomId: null,
+  draggingOffset: null,
   resizePreview: null,
   sharedWallPreview: [],
   viewMode: '2d',
@@ -193,6 +204,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ tool, drawing: null })
   },
   setDraggingRoomId: (id) => set({ draggingRoomId: id }),
+  setDraggingOffset: (offset) => set({ draggingOffset: offset }),
   setResizePreview: (preview) => set({ resizePreview: preview }),
   setSharedWallPreview: (preview) => set({ sharedWallPreview: preview }),
   startDrawing: (p) => set({ drawing: { points: [p], cursorMm: null } }),
