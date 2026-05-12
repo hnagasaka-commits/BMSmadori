@@ -22,11 +22,15 @@ const REFERENCE_HEIGHT_MM = 1700
 export function Humans({ humans }: { humans: Floor['humanModels'] }) {
   const selected = useEditorStore((s) => s.selected)
   const selectedId = selected?.kind === 'human' ? selected.id : null
+  // §M78 v0.14: FPV 中の人物はカメラの中なので非表示にする (自分の頭が視界を塞ぐのを防ぐ)
+  const fpvHumanId = useEditorStore((s) => s.fpvHumanId)
   return (
     <>
-      {humans.map((h) => (
-        <HumanFigure key={h.id} human={h} isSelected={h.id === selectedId} />
-      ))}
+      {humans
+        .filter((h) => h.id !== fpvHumanId)
+        .map((h) => (
+          <HumanFigure key={h.id} human={h} isSelected={h.id === selectedId} />
+        ))}
     </>
   )
 }

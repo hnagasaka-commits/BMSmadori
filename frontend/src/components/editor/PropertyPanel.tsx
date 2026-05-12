@@ -809,6 +809,9 @@ function HumanProperties({ humanId }: { humanId: string }) {
   const rotateHuman = useFloorplanStore((s) => s.rotateHuman)
   const removeHuman = useFloorplanStore((s) => s.removeHuman)
   const clearSelection = useEditorStore((s) => s.clearSelection)
+  const viewMode = useEditorStore((s) => s.viewMode)
+  const enterFpv = useEditorStore((s) => s.enterFpv)
+  const fpvHumanId = useEditorStore((s) => s.fpvHumanId)
 
   if (h == null) return null
 
@@ -877,6 +880,33 @@ function HumanProperties({ humanId }: { humanId: string }) {
           </div>
         </div>
       </div>
+
+      {/* §M78 v0.14: 3D 表示中限定で「この人の視点」に切り替えるボタン */}
+      {viewMode === '3d' && (
+        <div className="property-section">
+          <button
+            type="button"
+            onClick={() => enterFpv(h.id)}
+            disabled={fpvHumanId === h.id}
+            data-testid="human-fpv"
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              background: fpvHumanId === h.id ? 'var(--gray-300)' : '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: 4,
+              cursor: fpvHumanId === h.id ? 'default' : 'pointer',
+              fontSize: 13,
+            }}
+          >
+            {fpvHumanId === h.id ? 'FPV 中…' : 'この人の視点で見る (FPV)'}
+          </button>
+          <p style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 6 }}>
+            ボタン押下後、3D ビュー内をクリックでマウスロック。ESC で抜けます。
+          </p>
+        </div>
+      )}
 
       <div className="property-section">
         <button

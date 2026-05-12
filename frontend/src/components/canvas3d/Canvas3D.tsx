@@ -14,9 +14,9 @@
  * 描画頻度は OrbitControls の damping のみ。Konva 側の状態を直接購読しているので、
  * 2D で変更すると useFloorplanStore → SceneSpec 再計算 → React 再描画。
  */
-import { Suspense, useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { ContactShadows, OrbitControls, Sky } from '@react-three/drei'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { ContactShadows, OrbitControls, PointerLockControls, Sky } from '@react-three/drei'
 import * as THREE from 'three'
 import { useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore, type LightingPreset } from '@/store/editorStore'
@@ -164,19 +164,138 @@ export function Canvas3D() {
             far={6}
           />
 
-          <OrbitControls
+          {/* §M78 v0.14: fpvHumanId が立っている時は FPV カメラ + PointerLockControls。
+              null の時は通常の OrbitControls。 */}
+          <CameraRig
             target={target}
-            enableDamping
-            dampingFactor={0.08}
-            minDistance={1}
-            maxDistance={cameraDistance * 4}
-            maxPolarAngle={Math.PI / 2.05}
-            // §M73 v0.13: ホイールズームをカーソル位置基準に (CAD 系の挙動)
-            zoomToCursor
-            makeDefault
+            cameraDistance={cameraDistance}
+            stacked={stacked}
           />
         </Suspense>
       </Canvas>
+      {/* §M78: FPV モード中の HUD (Canvas 外の HTML 層) */}
+      <FpvHud />
+    </div>
+  )
+}
+
+/**
+ * §M78 v0.14: OrbitControls と FPV (PointerLockControls + 人モデル位置) を切替える。
+ *  - fpvHumanId が null: 通常の OrbitControls
+ *  - fpvHumanId に id がある: stacked から該当人物を探し、その目の高さに camera を置く。
+ *    PointerLockControls がマウス操作で視線回転を担当する。
+ *    ESC でロック解除されたら editorStore.exitFpv で state を戻す。
+ */
+function CameraRig({
+  target,
+  cameraDistance,
+  stacked,
+}: {
+  target: [number, number, number]
+  cameraDistance: number
+  stacked: { floor: import('@/types').Floor; scene: SceneSpec; yOffsetMm: number }[]
+}) {
+  const fpvHumanId = useEditorStore((s) => s.fpvHumanId)
+  const exitFpv = useEditorStore((s) => s.exitFpv)
+  const { camera } = useThree()
+
+  // 対象 HumanModel を探す (どのフロアに居るかも判定)。
+  // stacked の中身は floor 更新で都度新規参照になるので useMemo を挟まず直接走らせる
+  let fpvTarget: { human: import('@/types').HumanModel; yOffsetMm: number } | null = null
+  if (fpvHumanId != null) {
+    for (const s of stacked) {
+      const h = s.floor.humanModels.find((x) => x.id === fpvHumanId)
+      if (h != null) {
+        fpvTarget = { human: h, yOffsetMm: s.yOffsetMm }
+        break
+      }
+    }
+  }
+
+  // FPV に入る瞬間、カメラを人の目の高さ + 向きにセット
+  useEffect(() => {
+    if (fpvTarget == null) return
+    const { human, yOffsetMm } = fpvTarget
+    // 目線は身長 - 100mm (頭頂から ~10cm 下)
+    const eyeY = (yOffsetMm + Math.max(800, human.height - 100)) * MM_TO_M
+    const px = human.position[0] * MM_TO_M
+    const pz = human.position[1] * MM_TO_M
+    camera.position.set(px, eyeY, pz)
+    // human.rotation: Y 軸回転 (rad)。three.js デフォルト forward は -Z。
+    // 視点方向 = (0,0,-1) を Y で human.rotation 回転 → (-sin, 0, -cos)
+    const dirX = -Math.sin(human.rotation)
+    const dirZ = -Math.cos(human.rotation)
+    camera.lookAt(px + dirX * 10, eyeY, pz + dirZ * 10)
+  }, [fpvTarget, camera])
+
+  if (fpvHumanId != null && fpvTarget != null) {
+    return (
+      <PointerLockControls
+        // ロック解除 (ESC など) で FPV モードを抜ける
+        onUnlock={() => exitFpv()}
+      />
+    )
+  }
+  return (
+    <OrbitControls
+      target={target}
+      enableDamping
+      dampingFactor={0.08}
+      // §M77 v0.14: 旧 1m だと「室内に潜り込んで人と同じ目線まで降りられない」
+      // という指摘。0.2m まで詰めて、家具レベルの拡大や床上低い視点も可能に
+      minDistance={0.2}
+      maxDistance={cameraDistance * 4}
+      maxPolarAngle={Math.PI / 2.05}
+      // §M73 v0.13: ホイールズームをカーソル位置基準に (CAD 系の挙動)
+      zoomToCursor
+      makeDefault
+    />
+  )
+}
+
+/**
+ * §M78 v0.14: FPV 中だけ画面右上に出る「終了」HUD。
+ * Canvas の外 (HTML 層) なので、PointerLock の影響を受けずクリックできる。
+ */
+function FpvHud() {
+  const fpvHumanId = useEditorStore((s) => s.fpvHumanId)
+  const exitFpv = useEditorStore((s) => s.exitFpv)
+  if (fpvHumanId == null) return null
+  return (
+    <div
+      data-testid="fpv-hud"
+      style={{
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        zIndex: 20,
+        background: 'rgba(15, 23, 42, 0.85)',
+        padding: '8px 12px',
+        borderRadius: 6,
+        color: 'white',
+        fontSize: 12,
+        display: 'flex',
+        gap: 10,
+        alignItems: 'center',
+      }}
+    >
+      <span>FPV モード (ESC で終了)</span>
+      <button
+        type="button"
+        onClick={() => exitFpv()}
+        data-testid="fpv-exit"
+        style={{
+          border: 'none',
+          background: '#ef4444',
+          color: 'white',
+          padding: '4px 10px',
+          borderRadius: 4,
+          cursor: 'pointer',
+          fontSize: 12,
+        }}
+      >
+        FPV 終了
+      </button>
     </div>
   )
 }
@@ -531,7 +650,11 @@ function DoorPanel({
     g.rotation.y = current + step
   })
 
-  const panelDepthMm = wall.size[2] + 20
+  // §M76 v0.14: パネル厚を 40mm (実建材のドア厚) に縮小。
+  // 壁厚 (100mm 前後) より薄いので、壁の hole 形状 (M63 で切る) が
+  // パネルの両脇に見えて「ドアの形に開いた穴」が視覚的に判別できる。
+  // パネルは中心 Z=0 に置き、左右に均等に窪んで見える (どちらの面からも見える)。
+  const panelDepthMm = 40
   const hingeXMm = leftMm
   return (
     <group
@@ -565,7 +688,7 @@ function DoorPanel({
           position={[
             (widthMm - 60) * MM_TO_M,
             (sillHeightMm + heightMm / 2) * MM_TO_M,
-            ((wall.size[2] / 2) + 12) * MM_TO_M,
+            ((panelDepthMm / 2) + 8) * MM_TO_M,
           ]}
         >
           <sphereGeometry args={[18 * MM_TO_M, 16, 12]} />

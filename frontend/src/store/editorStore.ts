@@ -96,6 +96,12 @@ export type EditorState = {
   }>
   viewMode: ViewMode
   lightingPreset: LightingPreset
+  /**
+   * §M78 v0.14: 一人称視点 (FPV) でカメラを置く対象の HumanModel.id。
+   * null なら通常の OrbitControls 視点。文字列が入ると Canvas3D が
+   * 該当する人モデルの目の高さにカメラを置き、PointerLockControls で見回す。
+   */
+  fpvHumanId: string | null
   /** §11 Phase 2 / M17: 太陽時 (0..24)。LightingRig が太陽位置に変換 */
   sunHour: number
   /** §11 Phase 2 / M17: 季節。日の出/日の入り時刻と南中高度を決める */
@@ -132,6 +138,9 @@ export type EditorState = {
   cancelDrawing: () => void
   setViewMode: (mode: ViewMode) => void
   setLightingPreset: (preset: LightingPreset) => void
+  /** §M78 v0.14: 一人称視点モードに入る/抜ける */
+  enterFpv: (humanId: string) => void
+  exitFpv: () => void
   setSunHour: (hour: number) => void
   setSeason: (season: Season) => void
   enterReadonly: (reason: string) => void
@@ -168,6 +177,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   sharedWallPreview: [],
   viewMode: '2d',
   lightingPreset: 'noon',
+  fpvHumanId: null,
   sunHour: 12,
   season: 'spring',
   readonly: false,
@@ -202,6 +212,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   cancelDrawing: () => set({ drawing: null }),
   setViewMode: (viewMode) => set({ viewMode }),
   setLightingPreset: (lightingPreset) => set({ lightingPreset }),
+  enterFpv: (humanId) => set({ fpvHumanId: humanId }),
+  exitFpv: () => set({ fpvHumanId: null }),
   setSunHour: (sunHour) => set({ sunHour: Math.max(0, Math.min(24, sunHour)) }),
   setSeason: (season) => set({ season }),
   enterReadonly: (reason) => set({ readonly: true, readonlyReason: reason }),
