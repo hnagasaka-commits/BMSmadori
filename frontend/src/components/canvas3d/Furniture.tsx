@@ -9,7 +9,7 @@
  *  - drag 中は OrbitControls を disable (カメラを動かさない)
  *  - 旧バージョンの PivotControls は廃止し、メッシュ本体を直接掴む直感的 UX に変更
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import type { ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -18,8 +18,6 @@ import { furnitureScale3 } from '@/types'
 import { useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
-import { pickFurnitureTextureKind } from './proceduralTextures'
-import { useTextures } from './useTextures'
 import type { FurniturePiece } from './furniturePresets'
 
 const MM_TO_M = 1 / 1000
@@ -197,51 +195,6 @@ function PieceMesh({
     piece.size[2] * MM_TO_M,
   ]
 
-  // §M86 v0.18 / §M88 v0.19: リアルテクスチャモード。
-  // color hint から wood / fabric / leather を選び material.map に当てる。
-  // テクスチャは白基調なので color と乗算で模様が浮かぶ。
-  // §M88 で repeat を密にして (0.2m / タイル)、模様を肉眼ではっきり見えるようにした。
-  // また roughness/metalness も種類別にチューニング (木目=やや mat、布=高 mat、革=半光沢)
-  const realistic = useEditorStore((s) => s.realisticFurniture)
-  const textures = useTextures()
-  const textureKind = realistic ? pickFurnitureTextureKind(piece.material.color) : null
-  const sourceTex =
-    textureKind === 'wood'
-      ? textures.furnitureWood
-      : textureKind === 'fabric'
-        ? textures.furnitureFabric
-        : textureKind === 'leather'
-          ? textures.furnitureLeather
-          : null
-  // piece の大きさに応じて repeat を変える (0.2m で 1 タイル → 模様が密)
-  const repeatU = Math.max(1, piece.size[0] / 200)
-  const repeatV = Math.max(1, Math.max(piece.size[1], piece.size[2]) / 200)
-  const tex = useMemo(() => {
-    if (sourceTex == null) return null
-    const t = sourceTex.clone()
-    t.needsUpdate = true
-    t.wrapS = THREE.RepeatWrapping
-    t.wrapT = THREE.RepeatWrapping
-    t.repeat.set(repeatU, repeatV)
-    return t
-  }, [sourceTex, repeatU, repeatV])
-
-  // §M88: 種類別 PBR チューニング。realistic=false なら catalog の material をそのまま使う
-  const matRoughness = realistic
-    ? textureKind === 'wood'
-      ? Math.max(0.6, piece.material.roughness)
-      : textureKind === 'fabric'
-        ? Math.max(0.85, piece.material.roughness)
-        : textureKind === 'leather'
-          ? 0.55
-          : piece.material.roughness
-    : piece.material.roughness
-  const matMetalness = realistic
-    ? textureKind === 'leather'
-      ? 0.12
-      : Math.min(0.05, piece.material.metalness)
-    : piece.material.metalness
-
   if (piece.shape === 'cylinder') {
     const radius = size[1] / 2
     const length = size[0]
@@ -253,10 +206,9 @@ function PieceMesh({
       >
         <cylinderGeometry args={[radius, radius, length, 16]} />
         <meshStandardMaterial
-          {...(tex != null && { map: tex })}
           color={piece.material.color}
-          roughness={matRoughness}
-          metalness={matMetalness}
+          roughness={piece.material.roughness}
+          metalness={piece.material.metalness}
           emissive={highlighted ? '#3b82f6' : '#000000'}
           emissiveIntensity={highlighted ? 0.25 : 0}
         />
@@ -272,10 +224,9 @@ function PieceMesh({
     >
       <boxGeometry args={size} />
       <meshStandardMaterial
-        {...(tex != null && { map: tex })}
         color={piece.material.color}
-        roughness={matRoughness}
-        metalness={matMetalness}
+        roughness={piece.material.roughness}
+        metalness={piece.material.metalness}
         emissive={highlighted ? '#3b82f6' : '#000000'}
         emissiveIntensity={highlighted ? 0.25 : 0}
       />

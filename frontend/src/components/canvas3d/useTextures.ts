@@ -10,9 +10,6 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import {
   makeConcreteTexture,
-  makeFurnitureFabricTexture,
-  makeFurnitureLeatherTexture,
-  makeFurnitureWoodTexture,
   makeGrassTexture,
   makeKitchenFloorTexture,
   makeSidingTexture,
@@ -30,11 +27,6 @@ export type TextureBundle = {
   grassFloor: THREE.CanvasTexture
   wallpaper: THREE.CanvasTexture
   siding: THREE.CanvasTexture
-  /** §M86 v0.18 / §M88 v0.19: 家具リアルテクスチャ (色を modulate する white-base パターン) */
-  furnitureWood: THREE.CanvasTexture
-  furnitureFabric: THREE.CanvasTexture
-  /** §M88 v0.19: 黒革ソファや TV ボードなど暗い色向け */
-  furnitureLeather: THREE.CanvasTexture
 }
 
 let cache: TextureBundle | null = null
@@ -49,9 +41,6 @@ function getOrBuildBundle(): TextureBundle {
     grassFloor: makeGrassTexture(),
     wallpaper: makeWallpaperTexture(),
     siding: makeSidingTexture(),
-    furnitureWood: makeFurnitureWoodTexture(),
-    furnitureFabric: makeFurnitureFabricTexture(),
-    furnitureLeather: makeFurnitureLeatherTexture(),
   }
   return cache
 }

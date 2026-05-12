@@ -16,9 +16,59 @@
 
 import type { FurniturePiece } from '@/components/canvas3d/furniturePresets'
 
+/**
+ * §M92 v0.20: 家具カタログのカテゴリ。Sidebar の家具リストでグループ表示に使う。
+ *  - living   : リビング (ソファ / テーブル / TV / 観葉植物 / ラグ)
+ *  - dining   : ダイニング (テーブル / 食器棚 / カウンターチェア)
+ *  - kitchen  : キッチン (冷蔵庫 / カウンター / 洗濯機)
+ *  - bedroom  : 寝室 (ベッド / ナイトテーブル / ドレッサー)
+ *  - bath     : 水回り (浴槽 / 洗面台 / トイレ)
+ *  - storage  : 収納 (本棚 / クローゼット / 下駄箱 / 3 段ボックス)
+ *  - work     : ワーク (デスク / 椅子)
+ *  - lighting : 照明 (ペンダント / フロアランプ)
+ *  - misc     : その他 (ゴミ箱 / 玄関マット / 衣類スタンド)
+ */
+export type FurnitureCategory =
+  | 'living'
+  | 'dining'
+  | 'kitchen'
+  | 'bedroom'
+  | 'bath'
+  | 'storage'
+  | 'work'
+  | 'lighting'
+  | 'misc'
+
+export const FURNITURE_CATEGORY_LABELS: Record<FurnitureCategory, string> = {
+  living: 'リビング',
+  dining: 'ダイニング',
+  kitchen: 'キッチン',
+  bedroom: '寝室',
+  bath: '水回り',
+  storage: '収納',
+  work: 'ワーク',
+  lighting: '照明',
+  misc: 'その他',
+}
+
+/** §M92 v0.20: Sidebar グルーピング用の表示順 (上から登場させる順) */
+export const FURNITURE_CATEGORY_ORDER: readonly FurnitureCategory[] = [
+  'living',
+  'dining',
+  'kitchen',
+  'bedroom',
+  'bath',
+  'storage',
+  'work',
+  'lighting',
+  'misc',
+]
+
 export type FurnitureCatalogEntry = {
   id: string
   displayName: string
+  /** §M92 v0.20: 大分類カテゴリ。Sidebar グルーピング用 */
+  category: FurnitureCategory
   /** 配置時にバウンディングが必要な部屋の最小寸法 (mm)。Sidebar の自動配置で使う */
   minRoom: { w: number; h: number }
   /** カタログから生成される子ピース */
@@ -35,6 +85,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'sofa-standard',
     displayName: 'ソファ',
+    category: 'living',
     minRoom: { w: 1800, h: 2400 },
     pieces: [
       {
@@ -49,6 +100,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'coffee-table',
     displayName: 'ローテーブル',
+    category: 'living',
     minRoom: { w: 1100, h: 600 },
     pieces: [
       {
@@ -63,6 +115,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'tv-board',
     displayName: 'TV ボード',
+    category: 'living',
     minRoom: { w: 1600, h: 400 },
     pieces: [
       {
@@ -77,6 +130,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'dining-table-4',
     displayName: 'ダイニングテーブル (4 人)',
+    category: 'dining',
     minRoom: { w: 1600, h: 900 },
     pieces: [
       {
@@ -119,6 +173,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'kitchen-counter-i',
     displayName: 'I 型キッチン',
+    category: 'kitchen',
     minRoom: { w: 2400, h: 650 },
     pieces: [
       {
@@ -140,6 +195,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'bed-semi-double',
     displayName: 'セミダブルベッド',
+    category: 'bedroom',
     minRoom: { w: 1400, h: 2000 },
     pieces: [
       {
@@ -161,6 +217,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'nightstand',
     displayName: 'ナイトスタンド',
+    category: 'bedroom',
     minRoom: { w: 400, h: 400 },
     pieces: [
       {
@@ -175,6 +232,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'bathtub',
     displayName: 'バスタブ',
+    category: 'bath',
     minRoom: { w: 1600, h: 750 },
     pieces: [
       {
@@ -189,6 +247,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'sink-vanity',
     displayName: '洗面化粧台',
+    category: 'bath',
     minRoom: { w: 900, h: 500 },
     pieces: [
       {
@@ -210,6 +269,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'toilet-tank',
     displayName: 'トイレ',
+    category: 'bath',
     minRoom: { w: 400, h: 600 },
     pieces: [
       {
@@ -231,6 +291,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'shoe-cabinet',
     displayName: '靴箱',
+    category: 'storage',
     minRoom: { w: 400, h: 1200 },
     pieces: [
       {
@@ -248,6 +309,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'sofa-l-shape',
     displayName: 'L 字ソファ',
+    category: 'living',
     minRoom: { w: 2500, h: 2200 },
     pieces: [
       {
@@ -269,6 +331,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'armchair',
     displayName: '一人掛けアームチェア',
+    category: 'living',
     minRoom: { w: 800, h: 800 },
     pieces: [
       {
@@ -283,6 +346,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'side-table',
     displayName: 'サイドテーブル',
+    category: 'living',
     minRoom: { w: 450, h: 450 },
     pieces: [
       {
@@ -297,6 +361,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'dining-table-6',
     displayName: 'ダイニングテーブル (6 人)',
+    category: 'dining',
     minRoom: { w: 1800, h: 900 },
     pieces: [
       {
@@ -311,6 +376,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'tv-stand-large',
     displayName: 'TV スタンド (大)',
+    category: 'living',
     minRoom: { w: 2000, h: 400 },
     pieces: [
       {
@@ -325,6 +391,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'bed-single',
     displayName: 'シングルベッド',
+    category: 'bedroom',
     minRoom: { w: 1000, h: 2000 },
     pieces: [
       {
@@ -346,6 +413,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'bed-double',
     displayName: 'ダブルベッド',
+    category: 'bedroom',
     minRoom: { w: 1400, h: 2000 },
     pieces: [
       {
@@ -367,6 +435,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'bed-queen',
     displayName: 'クイーンベッド',
+    category: 'bedroom',
     minRoom: { w: 1600, h: 2050 },
     pieces: [
       {
@@ -388,6 +457,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'dresser',
     displayName: 'ドレッサー',
+    category: 'bedroom',
     minRoom: { w: 1000, h: 450 },
     pieces: [
       {
@@ -409,6 +479,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'refrigerator',
     displayName: '冷蔵庫',
+    category: 'kitchen',
     minRoom: { w: 600, h: 650 },
     pieces: [
       {
@@ -423,6 +494,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'dining-cabinet',
     displayName: 'カップボード',
+    category: 'dining',
     minRoom: { w: 1200, h: 450 },
     pieces: [
       {
@@ -437,6 +509,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'washing-machine',
     displayName: '洗濯機',
+    category: 'bath',
     minRoom: { w: 700, h: 700 },
     pieces: [
       {
@@ -451,6 +524,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'closet-walk-in',
     displayName: 'ウォークインクローゼット (棚)',
+    category: 'storage',
     minRoom: { w: 1500, h: 600 },
     pieces: [
       {
@@ -465,6 +539,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'bookshelf',
     displayName: '本棚',
+    category: 'storage',
     minRoom: { w: 900, h: 300 },
     pieces: [
       {
@@ -481,6 +556,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'storage-box-3tier',
     displayName: '3 段ボックス',
+    category: 'storage',
     minRoom: { w: 420, h: 320 },
     pieces: [
       // 本体外殻 (側板 + 背板を一体の箱で表現)
@@ -512,6 +588,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'desk-work',
     displayName: 'ワークデスク',
+    category: 'work',
     minRoom: { w: 1200, h: 600 },
     pieces: [
       {
@@ -533,6 +610,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'pendant-light',
     displayName: 'ペンダントライト',
+    category: 'lighting',
     minRoom: { w: 300, h: 300 },
     pieces: [
       {
@@ -547,6 +625,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'floor-lamp',
     displayName: 'フロアランプ',
+    category: 'lighting',
     minRoom: { w: 400, h: 400 },
     pieces: [
       {
@@ -568,6 +647,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'plant-large',
     displayName: '観葉植物 (大)',
+    category: 'living',
     minRoom: { w: 500, h: 500 },
     pieces: [
       {
@@ -589,6 +669,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'rug-3x2',
     displayName: 'ラグ (3×2m)',
+    category: 'living',
     minRoom: { w: 2000, h: 3000 },
     pieces: [
       {
@@ -606,6 +687,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'toilet-detail',
     displayName: '洋式トイレ (詳細)',
+    category: 'bath',
     minRoom: { w: 450, h: 700 },
     pieces: [
       {
@@ -641,6 +723,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'trash-can-small',
     displayName: 'ゴミ箱 (小)',
+    category: 'misc',
     minRoom: { w: 250, h: 250 },
     pieces: [
       {
@@ -655,6 +738,7 @@ const ENTRIES: FurnitureCatalogEntry[] = [
   {
     id: 'trash-can-large',
     displayName: 'ゴミ箱 (45L 大)',
+    category: 'misc',
     minRoom: { w: 350, h: 350 },
     pieces: [
       {
@@ -670,6 +754,337 @@ const ENTRIES: FurnitureCatalogEntry[] = [
         size: [340, 20, 340],
         shape: 'cylinder',
         material: { color: '#2c2c2c', roughness: 0.6, metalness: 0.2 },
+      },
+    ],
+  },
+  // §M92 v0.20: 家具バリエーション追加
+  {
+    id: 'ottoman',
+    displayName: 'オットマン (足置き)',
+    category: 'living',
+    minRoom: { w: 600, h: 500 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 200, 0],
+        size: [600, 400, 500],
+        shape: 'box',
+        material: { color: '#7a8896', roughness: 0.9, metalness: 0.02 },
+      },
+    ],
+  },
+  {
+    id: 'plant-small',
+    displayName: '観葉植物 (小)',
+    category: 'living',
+    minRoom: { w: 250, h: 250 },
+    pieces: [
+      {
+        id: 'pot',
+        position: [0, 100, 0],
+        size: [220, 200, 220],
+        shape: 'cylinder',
+        material: { color: '#9b6b3f', roughness: 0.7, metalness: 0.0 },
+      },
+      {
+        id: 'leaves',
+        position: [0, 400, 0],
+        size: [380, 600, 380],
+        shape: 'cylinder',
+        material: { color: '#3d6b3a', roughness: 0.95, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'counter-chair',
+    displayName: 'カウンターチェア',
+    category: 'dining',
+    minRoom: { w: 420, h: 420 },
+    pieces: [
+      {
+        id: 'seat',
+        position: [0, 700, 0],
+        size: [400, 50, 400],
+        shape: 'box',
+        material: { color: '#3a3a3a', roughness: 0.6, metalness: 0.1 },
+      },
+      {
+        id: 'leg',
+        position: [0, 350, 0],
+        size: [60, 650, 60],
+        shape: 'cylinder',
+        material: { color: '#222222', roughness: 0.4, metalness: 0.6 },
+      },
+    ],
+  },
+  {
+    id: 'kitchen-counter-l',
+    displayName: 'L 型キッチン',
+    category: 'kitchen',
+    minRoom: { w: 2400, h: 2400 },
+    pieces: [
+      {
+        id: 'counter-h',
+        position: [0, 425, -700],
+        size: [2400, 850, 650],
+        shape: 'box',
+        material: { color: '#dad6cd', roughness: 0.4, metalness: 0.15 },
+      },
+      {
+        id: 'counter-v',
+        position: [-875, 425, 175],
+        size: [650, 850, 1100],
+        shape: 'box',
+        material: { color: '#dad6cd', roughness: 0.4, metalness: 0.15 },
+      },
+      {
+        id: 'sink',
+        position: [-600, 880, -700],
+        size: [600, 60, 450],
+        shape: 'box',
+        material: { color: '#b7bcc2', roughness: 0.2, metalness: 0.85 },
+      },
+    ],
+  },
+  {
+    id: 'microwave',
+    displayName: '電子レンジ',
+    category: 'kitchen',
+    minRoom: { w: 480, h: 400 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 200, 0],
+        size: [480, 300, 400],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.4, metalness: 0.3 },
+      },
+      {
+        id: 'window',
+        position: [80, 200, 200],
+        size: [240, 200, 6],
+        shape: 'box',
+        material: { color: '#3a3a3a', roughness: 0.1, metalness: 0.6 },
+      },
+    ],
+  },
+  {
+    id: 'dishwasher',
+    displayName: '食器洗浄機',
+    category: 'kitchen',
+    minRoom: { w: 500, h: 600 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 425, 0],
+        size: [500, 850, 600],
+        shape: 'box',
+        material: { color: '#e0e2e5', roughness: 0.35, metalness: 0.3 },
+      },
+    ],
+  },
+  {
+    id: 'wardrobe',
+    displayName: 'ワードローブ',
+    category: 'bedroom',
+    minRoom: { w: 1200, h: 600 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 950, 0],
+        size: [1200, 1900, 600],
+        shape: 'box',
+        material: { color: '#7a5c40', roughness: 0.55, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'mirror-stand',
+    displayName: '姿見',
+    category: 'bedroom',
+    minRoom: { w: 500, h: 200 },
+    pieces: [
+      {
+        id: 'frame',
+        position: [0, 850, 0],
+        size: [500, 1700, 50],
+        shape: 'box',
+        material: { color: '#5a3e22', roughness: 0.55, metalness: 0.0 },
+      },
+      {
+        id: 'glass',
+        position: [0, 850, 30],
+        size: [440, 1620, 5],
+        shape: 'box',
+        material: { color: '#cfdde6', roughness: 0.04, metalness: 0.9 },
+      },
+    ],
+  },
+  {
+    id: 'office-chair',
+    displayName: 'オフィスチェア',
+    category: 'work',
+    minRoom: { w: 600, h: 600 },
+    pieces: [
+      {
+        id: 'seat',
+        position: [0, 460, 0],
+        size: [520, 80, 520],
+        shape: 'box',
+        material: { color: '#2c2c2c', roughness: 0.7, metalness: 0.1 },
+      },
+      {
+        id: 'back',
+        position: [0, 750, 230],
+        size: [500, 600, 60],
+        shape: 'box',
+        material: { color: '#2c2c2c', roughness: 0.7, metalness: 0.1 },
+      },
+      {
+        id: 'pole',
+        position: [0, 250, 0],
+        size: [80, 400, 80],
+        shape: 'cylinder',
+        material: { color: '#1c1c1c', roughness: 0.3, metalness: 0.6 },
+      },
+    ],
+  },
+  {
+    id: 'desk-study',
+    displayName: '学習デスク',
+    category: 'work',
+    minRoom: { w: 1100, h: 600 },
+    pieces: [
+      {
+        id: 'top',
+        position: [0, 720, 0],
+        size: [1100, 30, 600],
+        shape: 'box',
+        material: { color: '#d2bb96', roughness: 0.55, metalness: 0.0 },
+      },
+      {
+        id: 'leg-l',
+        position: [-500, 360, 0],
+        size: [50, 720, 600],
+        shape: 'box',
+        material: { color: '#a98765', roughness: 0.6, metalness: 0.0 },
+      },
+      {
+        id: 'leg-r',
+        position: [500, 360, 0],
+        size: [50, 720, 600],
+        shape: 'box',
+        material: { color: '#a98765', roughness: 0.6, metalness: 0.0 },
+      },
+      {
+        id: 'shelf',
+        position: [0, 1100, -260],
+        size: [1100, 250, 80],
+        shape: 'box',
+        material: { color: '#a98765', roughness: 0.6, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'desk-lamp',
+    displayName: 'デスクライト',
+    category: 'lighting',
+    minRoom: { w: 200, h: 200 },
+    pieces: [
+      {
+        id: 'base',
+        position: [0, 20, 0],
+        size: [180, 40, 180],
+        shape: 'cylinder',
+        material: { color: '#2c2c2c', roughness: 0.3, metalness: 0.6 },
+      },
+      {
+        id: 'arm',
+        position: [60, 250, 0],
+        size: [30, 460, 30],
+        shape: 'cylinder',
+        material: { color: '#2c2c2c', roughness: 0.3, metalness: 0.6 },
+      },
+      {
+        id: 'shade',
+        position: [180, 460, 0],
+        size: [200, 100, 200],
+        shape: 'cylinder',
+        material: { color: '#fff2b8', roughness: 0.3, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'ceiling-light',
+    displayName: 'シーリングライト',
+    category: 'lighting',
+    minRoom: { w: 400, h: 400 },
+    pieces: [
+      {
+        id: 'shade',
+        position: [0, 2380, 0],
+        size: [500, 40, 500],
+        shape: 'cylinder',
+        material: { color: '#f6f1e3', roughness: 0.4, metalness: 0.05 },
+      },
+    ],
+  },
+  {
+    id: 'hanger-rack',
+    displayName: 'ハンガーラック',
+    category: 'storage',
+    minRoom: { w: 900, h: 500 },
+    pieces: [
+      {
+        id: 'pole',
+        position: [0, 1700, 0],
+        size: [900, 30, 30],
+        shape: 'box',
+        material: { color: '#2c2c2c', roughness: 0.3, metalness: 0.6 },
+      },
+      {
+        id: 'leg-l',
+        position: [-440, 850, 0],
+        size: [30, 1700, 500],
+        shape: 'box',
+        material: { color: '#2c2c2c', roughness: 0.3, metalness: 0.6 },
+      },
+      {
+        id: 'leg-r',
+        position: [440, 850, 0],
+        size: [30, 1700, 500],
+        shape: 'box',
+        material: { color: '#2c2c2c', roughness: 0.3, metalness: 0.6 },
+      },
+    ],
+  },
+  {
+    id: 'entrance-mat',
+    displayName: '玄関マット',
+    category: 'misc',
+    minRoom: { w: 900, h: 600 },
+    pieces: [
+      {
+        id: 'mat',
+        position: [0, 6, 0],
+        size: [900, 12, 600],
+        shape: 'box',
+        material: { color: '#7a503a', roughness: 1.0, metalness: 0.0 },
+      },
+    ],
+  },
+  {
+    id: 'umbrella-stand',
+    displayName: '傘立て',
+    category: 'misc',
+    minRoom: { w: 250, h: 250 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 250, 0],
+        size: [220, 500, 220],
+        shape: 'cylinder',
+        material: { color: '#8a8a8a', roughness: 0.4, metalness: 0.6 },
       },
     ],
   },

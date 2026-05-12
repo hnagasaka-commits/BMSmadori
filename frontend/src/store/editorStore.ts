@@ -110,12 +110,6 @@ export type EditorState = {
    * 該当する人モデルの目の高さにカメラを置き、PointerLockControls で見回す。
    */
   fpvHumanId: string | null
-  /**
-   * §M86 v0.18: 3D 家具を「リアルテクスチャ」モードで描画するかどうか。
-   * true なら木目 / 布のプロシージャルテクスチャを家具色に乗算して質感を上げる。
-   * false (既定) なら従来通り単色シェーディング。
-   */
-  realisticFurniture: boolean
   /** §11 Phase 2 / M17: 太陽時 (0..24)。LightingRig が太陽位置に変換 */
   sunHour: number
   /** §11 Phase 2 / M17: 季節。日の出/日の入り時刻と南中高度を決める */
@@ -157,8 +151,6 @@ export type EditorState = {
   /** §M78 v0.14: 一人称視点モードに入る/抜ける */
   enterFpv: (humanId: string) => void
   exitFpv: () => void
-  /** §M86 v0.18: 家具のリアルテクスチャモードを切替 */
-  setRealisticFurniture: (on: boolean) => void
   setSunHour: (hour: number) => void
   setSeason: (season: Season) => void
   enterReadonly: (reason: string) => void
@@ -197,7 +189,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   viewMode: '2d',
   lightingPreset: 'noon',
   fpvHumanId: null,
-  realisticFurniture: false,
   sunHour: 12,
   season: 'spring',
   readonly: false,
@@ -235,7 +226,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setLightingPreset: (lightingPreset) => set({ lightingPreset }),
   enterFpv: (humanId) => set({ fpvHumanId: humanId }),
   exitFpv: () => set({ fpvHumanId: null }),
-  setRealisticFurniture: (on) => set({ realisticFurniture: on }),
   setSunHour: (sunHour) => set({ sunHour: Math.max(0, Math.min(24, sunHour)) }),
   setSeason: (season) => set({ season }),
   enterReadonly: (reason) => set({ readonly: true, readonlyReason: reason }),

@@ -22,7 +22,7 @@ import { FurnitureMark } from './FurnitureMark'
 import { GridLayer } from './GridLayer'
 import { RoomResizeHandles } from './RoomResizeHandles'
 import { pointsToPolygonShape, simplifyFreehandPath } from '@/core/drawing'
-import { PipeSpaceMark } from './PipeSpaceMark'
+// §M91 v0.20: PipeSpaceMark 削除 (2D 上に PS の四角を出さない)
 import { RoomShape } from './RoomShape'
 import { WallLine } from './WallLine'
 import { WindowMark } from './WindowMark'
@@ -369,11 +369,8 @@ export function Canvas2D() {
               <ColumnMark key={c.id} column={c} scale={zoom} />
             ))}
           </Layer>
-          <Layer listening={false}>
-            {(floor?.pipeSpaces ?? []).map((p) => (
-              <PipeSpaceMark key={p.id} pipeSpace={p} scale={zoom} />
-            ))}
-          </Layer>
+          {/* §M91 v0.20: PipeSpaceMark (2D の四角) は UI 上不要というユーザー要望で撤去。
+              データ (floor.pipeSpaces) は引き続き残るが 2D には描画しない */}
           <Layer>
             {/* §M25 家具: 部屋・壁よりも上に描いてドラッグ可 */}
             {(floor?.furniture ?? []).map((f) => (

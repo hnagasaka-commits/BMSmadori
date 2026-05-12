@@ -4,8 +4,15 @@
  * Phase 1 はプリセットのリストをそのまま表示。配置位置は「現在の部屋 AABB の右側にスタック」
  * という単純戦略にする (重なり判定で拒否されたら横にずらす)。
  */
+import { useMemo, useState } from 'react'
 import { ROOM_PRESETS } from '@/data/roomPresets'
-import { listCatalog } from '@/data/furnitureCatalog'
+import {
+  FURNITURE_CATEGORY_LABELS,
+  FURNITURE_CATEGORY_ORDER,
+  listCatalog,
+  type FurnitureCatalogEntry,
+  type FurnitureCategory,
+} from '@/data/furnitureCatalog'
 import { selectRooms, useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import type { Shape } from '@/types'
@@ -52,6 +59,37 @@ export function Sidebar() {
     selected?.kind === 'room'
       ? rooms.find((r) => r.id === selected.id && r.shape.kind === 'rect')?.id ?? null
       : null
+
+  // §M92 / §M93 v0.20: 家具検索 + カテゴリグループ表示。
+  // 検索クエリは displayName / catalogId / カテゴリラベルに対して大小無視で部分一致。
+  const [furnitureQuery, setFurnitureQuery] = useState('')
+  const groupedFurniture = useMemo(() => {
+    const q = furnitureQuery.trim().toLowerCase()
+    const all = listCatalog()
+    const filtered = q === ''
+      ? all
+      : all.filter((e) => {
+          const label = FURNITURE_CATEGORY_LABELS[e.category].toLowerCase()
+          return (
+            e.displayName.toLowerCase().includes(q) ||
+            e.id.toLowerCase().includes(q) ||
+            label.includes(q)
+          )
+        })
+    const groups = new Map<FurnitureCategory, FurnitureCatalogEntry[]>()
+    for (const e of filtered) {
+      const list = groups.get(e.category)
+      if (list == null) groups.set(e.category, [e])
+      else list.push(e)
+    }
+    // カテゴリ順序を固定 (空のカテゴリは省略)
+    return FURNITURE_CATEGORY_ORDER.flatMap((c) => {
+      const list = groups.get(c)
+      return list == null || list.length === 0
+        ? []
+        : [{ category: c, label: FURNITURE_CATEGORY_LABELS[c], entries: list }]
+    })
+  }, [furnitureQuery])
 
   /**
    * §11 Phase 2 / M15: 規格カタログから個別に家具を 1 つ追加。
@@ -161,27 +199,80 @@ export function Sidebar() {
           </button>
         </div>
         {/*
-          §11 Phase 2 / M15: 規格カタログから 1 アイテムずつ配置するピッカー。
-          自動家具配置は「部屋に合った既定セット」が出るが、追加で別カタログを欲しいときの口。
-          配置位置は最初の部屋の中央。3D ビューで PivotControls により動かして調整する想定。
+          §M92 / §M93 v0.20: カテゴリで折り畳まれた家具カタログ + 検索ボックス。
+          検索クエリは displayName / catalogId / カテゴリラベル に対して部分一致。
         */}
-        <div className="preset-list" style={{ marginTop: 8 }}>
-          {listCatalog().map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() => handleAddFromCatalog(entry.id)}
-              data-testid={`furniture-${entry.id}`}
-              disabled={readonly}
-              title={`カタログから「${entry.displayName}」を 1 つ追加`}
-            >
-              <span>{entry.displayName}</span>
-              <span className="preset-size">
-                {(entry.minRoom.w / 1000).toFixed(1)} × {(entry.minRoom.h / 1000).toFixed(1)}
-              </span>
-            </button>
-          ))}
+        <div style={{ marginTop: 12 }}>
+          <input
+            type="search"
+            value={furnitureQuery}
+            onChange={(e) => setFurnitureQuery(e.target.value)}
+            placeholder="家具を検索 (例: ベッド / 革 / 棚)"
+            data-testid="furniture-search"
+            aria-label="家具を検索"
+            disabled={readonly}
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              fontSize: 12,
+              border: '1px solid var(--gray-300, #d4d4d4)',
+              borderRadius: 4,
+            }}
+          />
         </div>
+        {groupedFurniture.length === 0 && (
+          <div
+            style={{
+              padding: 8,
+              marginTop: 6,
+              fontSize: 12,
+              color: 'var(--gray-500)',
+            }}
+            data-testid="furniture-empty"
+          >
+            該当する家具がありません
+          </div>
+        )}
+        {groupedFurniture.map((group) => (
+          <div
+            key={group.category}
+            data-testid={`furniture-group-${group.category}`}
+            style={{ marginTop: 10 }}
+          >
+            <h3
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--gray-600, #525252)',
+                margin: '4px 0',
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}
+            >
+              {group.label}
+              <span style={{ color: 'var(--gray-400)', marginLeft: 6, fontWeight: 400 }}>
+                ({group.entries.length})
+              </span>
+            </h3>
+            <div className="preset-list">
+              {group.entries.map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  onClick={() => handleAddFromCatalog(entry.id)}
+                  data-testid={`furniture-${entry.id}`}
+                  disabled={readonly}
+                  title={`カタログから「${entry.displayName}」を 1 つ追加`}
+                >
+                  <span>{entry.displayName}</span>
+                  <span className="preset-size">
+                    {(entry.minRoom.w / 1000).toFixed(1)} × {(entry.minRoom.h / 1000).toFixed(1)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/*
