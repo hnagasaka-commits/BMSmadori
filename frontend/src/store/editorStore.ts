@@ -71,6 +71,27 @@ export type EditorState = {
    * Group ローカルの Rect stroke を「動く部屋輪郭」として見せる。
    */
   draggingRoomId: string | null
+  /**
+   * §M41 Phase 3 v0.3: リサイズ中のライブプレビュー (1 部屋向け、角ハンドル用)。
+   */
+  resizePreview: {
+    roomId: string
+    x: number
+    y: number
+    w: number
+    h: number
+  } | null
+  /**
+   * §M41 Phase 3 v0.3: 共有壁ドラッグ中の 2 部屋プレビュー (room.id → 新しい AABB)。
+   * 0 件か 2 件のどちらか。
+   */
+  sharedWallPreview: ReadonlyArray<{
+    roomId: string
+    x: number
+    y: number
+    w: number
+    h: number
+  }>
   viewMode: ViewMode
   lightingPreset: LightingPreset
   /** §11 Phase 2 / M17: 太陽時 (0..24)。LightingRig が太陽位置に変換 */
@@ -97,6 +118,10 @@ export type EditorState = {
   setTool: (tool: EditorTool) => void
   /** §M32: 部屋ドラッグの開始/終了マーカー (壁プレビューと同期) */
   setDraggingRoomId: (id: string | null) => void
+  /** §M41: リサイズ中のプレビュー寸法を設定 (null でクリア) */
+  setResizePreview: (preview: EditorState['resizePreview']) => void
+  /** §M41: 共有壁ドラッグ中の 2 部屋プレビューを設定 ([] でクリア) */
+  setSharedWallPreview: (preview: EditorState['sharedWallPreview']) => void
   /** §M27 描画 API: 開始 / 点追加 / カーソル移動 / 確定 (= 点列を返す) / キャンセル */
   startDrawing: (firstPoint: readonly [number, number]) => void
   addDrawPoint: (point: readonly [number, number]) => void
@@ -137,6 +162,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   tool: 'select',
   drawing: null,
   draggingRoomId: null,
+  resizePreview: null,
+  sharedWallPreview: [],
   viewMode: '2d',
   lightingPreset: 'noon',
   sunHour: 12,
@@ -154,6 +181,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ tool, drawing: null })
   },
   setDraggingRoomId: (id) => set({ draggingRoomId: id }),
+  setResizePreview: (preview) => set({ resizePreview: preview }),
+  setSharedWallPreview: (preview) => set({ sharedWallPreview: preview }),
   startDrawing: (p) => set({ drawing: { points: [p], cursorMm: null } }),
   addDrawPoint: (p) =>
     set((s) =>

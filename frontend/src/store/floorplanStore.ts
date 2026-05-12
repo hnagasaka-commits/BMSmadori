@@ -194,6 +194,13 @@ export type FloorplanState = {
   }) => string | null
   /** 手動でドアを削除。削除直前の壁の EdgeKey を tombstone に追加する。 */
   removeDoor: (doorId: string) => void
+  /** §M43/M44: ドアの編集 (幅 / 内開きフラグ / swingDirection / type) */
+  updateDoor: (
+    doorId: string,
+    patch: Partial<
+      Pick<Door, 'width' | 'positionRatio' | 'swingInward' | 'swingDirection' | 'type'>
+    >,
+  ) => void
 
   // Wall (種別・ロック編集。Phase 1 では shape 再生成と独立に直接更新できる)
   updateWall: (
@@ -724,6 +731,35 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
       }, floorIdx),
     })
     return id
+  },
+
+  updateDoor: (doorId, patch) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    const idx = floor.doors.findIndex((d) => d.id === doorId)
+    if (idx < 0) return
+    const door = floor.doors[idx]!
+    const next: Door = {
+      ...door,
+      ...(patch.width !== undefined && {
+        width: Math.max(400, Math.round(patch.width)),
+      }),
+      ...(patch.positionRatio !== undefined && {
+        positionRatio: clamp(patch.positionRatio, 0, 1),
+      }),
+      ...(patch.swingInward !== undefined && { swingInward: patch.swingInward }),
+      ...(patch.swingDirection !== undefined && {
+        swingDirection: patch.swingDirection,
+      }),
+      ...(patch.type !== undefined && { type: patch.type }),
+    }
+    snapshotForHistory(state.floorplan)
+    const nextDoors = floor.doors.map((d, i) => (i === idx ? next : d))
+    set({
+      floorplan: replaceFloor(state.floorplan, { ...floor, doors: nextDoors }, floorIdx),
+    })
   },
 
   removeDoor: (doorId) => {

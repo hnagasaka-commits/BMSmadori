@@ -18,9 +18,15 @@ export function WindowMark({ window: win, wall, scale }: Props) {
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
+  const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
   const isSelected = selected?.kind === 'window' && selected.id === win.id
   // §M32: ドラッグ中の部屋に属する壁の窓は非表示
   if (draggingRoomId != null && wall.sharedBy.includes(draggingRoomId)) return null
+  // §M41: 共有壁ドラッグ中、影響を受ける部屋の壁の窓も非表示
+  if (sharedWallPreview.length > 0) {
+    const ids = new Set(sharedWallPreview.map((p) => p.roomId))
+    if (wall.sharedBy.some((id) => ids.has(id))) return null
+  }
 
   // 壁の方向ベクトル (ワールド mm)
   const dx = wall.to[0] - wall.from[0]

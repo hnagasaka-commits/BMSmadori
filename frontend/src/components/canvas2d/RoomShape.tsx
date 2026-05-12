@@ -30,6 +30,8 @@ export function RoomShape({ room, scale, gridSize }: Props) {
   const selected = useEditorStore((s) => s.selected)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
   const setDraggingRoomId = useEditorStore((s) => s.setDraggingRoomId)
+  const resizePreview = useEditorStore((s) => s.resizePreview)
+  const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
   const moveRoom = useFloorplanStore((s) => s.moveRoom)
   const otherRooms = useFloorplanStore(selectRooms)
 
@@ -86,21 +88,30 @@ export function RoomShape({ room, scale, gridSize }: Props) {
   }
 
   if (room.shape.kind === 'rect') {
-    const { w, h } = room.shape
+    // §M41: リサイズプレビュー中はそちらの寸法/位置を優先 (床と壁が同期して見える)
+    const corner =
+      resizePreview != null && resizePreview.roomId === room.id ? resizePreview : null
+    const shared = sharedWallPreview.find((p) => p.roomId === room.id) ?? null
+    const preview = corner ?? shared
+    const dispX = preview?.x ?? room.shape.x
+    const dispY = preview?.y ?? room.shape.y
+    const w = preview?.w ?? room.shape.w
+    const h = preview?.h ?? room.shape.h
+    const isResizing = preview != null
     return (
       <Group
         ref={groupRef}
-        x={originX * scale}
-        y={originY * scale}
+        x={dispX * scale}
+        y={dispY * scale}
         {...commonHandlers()}
       >
         <Rect
           width={w * scale}
           height={h * scale}
           fill={isSelected ? '#eff6ff' : '#ffffff'}
-          // §M32: ドラッグ中は壁レイヤーが消えるので、Rect の stroke を本物の壁色に強める
-          stroke={isDragging ? '#171717' : isSelected ? '#3b82f6' : '#a3a3a3'}
-          strokeWidth={isDragging ? 4 : isSelected ? 2 : 1}
+          // §M32 + M41: ドラッグ/リサイズ中は壁レイヤーが消えるので、Rect の stroke を本物の壁色に強める
+          stroke={isDragging || isResizing ? '#171717' : isSelected ? '#3b82f6' : '#a3a3a3'}
+          strokeWidth={isDragging || isResizing ? 4 : isSelected ? 2 : 1}
           rotation={room.rotation}
           offsetX={0}
           offsetY={0}

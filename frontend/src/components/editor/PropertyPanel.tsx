@@ -502,10 +502,13 @@ function DoorProperties({ doorId }: { doorId: string }) {
   const door = useFloorplanStore((s) =>
     s.floorplan.floors[s.activeFloorIndex]?.doors.find((d) => d.id === doorId),
   )
+  const updateDoor = useFloorplanStore((s) => s.updateDoor)
   const removeDoor = useFloorplanStore((s) => s.removeDoor)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
   if (door == null) return null
+  // §M43: swingInward の既定は true 扱い (旧データに対しても "内開き" として描画する)
+  const isInward = door.swingInward !== false
 
   return (
     <section className="editor-properties" data-testid="property-panel">
@@ -517,18 +520,54 @@ function DoorProperties({ doorId }: { doorId: string }) {
         </div>
         <div className="property-row">
           <span className="label">幅 (mm)</span>
-          <span className="value">{door.width}</span>
+          <input
+            type="number"
+            value={door.width}
+            step={50}
+            min={400}
+            onChange={(e) => updateDoor(door.id, { width: Number(e.target.value) })}
+            data-testid="door-width"
+            aria-label="ドアの幅 (mm)"
+          />
         </div>
         <div className="property-row">
           <span className="label">位置比</span>
-          <span className="value">{door.positionRatio.toFixed(2)}</span>
+          <input
+            type="number"
+            value={door.positionRatio}
+            step={0.05}
+            min={0}
+            max={1}
+            onChange={(e) =>
+              updateDoor(door.id, { positionRatio: Number(e.target.value) })
+            }
+            data-testid="door-position-ratio"
+            aria-label="ドアの壁上位置比 (0〜1)"
+          />
         </div>
-        {door.swingDirection != null && (
-          <div className="property-row">
-            <span className="label">開く向き</span>
-            <span className="value">{door.swingDirection}</span>
-          </div>
-        )}
+      </div>
+
+      <div className="property-section">
+        <h3>開閉方向 (§M43)</h3>
+        {/* §M43: 内開き / 外開き トグル */}
+        <div className="rotation-buttons" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <button
+            type="button"
+            aria-pressed={isInward}
+            onClick={() => updateDoor(door.id, { swingInward: true })}
+            data-testid="door-swing-inward"
+          >
+            内開き
+          </button>
+          <button
+            type="button"
+            aria-pressed={!isInward}
+            onClick={() => updateDoor(door.id, { swingInward: false })}
+            data-testid="door-swing-outward"
+          >
+            外開き
+          </button>
+        </div>
       </div>
 
       <div className="property-section">

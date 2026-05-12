@@ -209,6 +209,8 @@ const DoorSchema = z.object({
   type: DoorTypeSchema,
   swingDirection: z.enum(['left', 'right']).optional(),
   swingTo: z.string().optional(),
+  // §M43 v0.3
+  swingInward: z.boolean().optional(),
 })
 
 const WindowSchema = z.object({

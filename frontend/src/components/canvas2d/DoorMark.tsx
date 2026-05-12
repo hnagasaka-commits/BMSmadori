@@ -25,9 +25,15 @@ export function DoorMark({ door, wall, scale }: Props) {
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
+  const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
   const isSelected = selected?.kind === 'door' && selected.id === door.id
   // §M32: ドラッグ中の部屋に属する壁のドアは非表示
   if (draggingRoomId != null && wall.sharedBy.includes(draggingRoomId)) return null
+  // §M41: 共有壁ドラッグ中、影響を受ける部屋の壁のドアも非表示
+  if (sharedWallPreview.length > 0) {
+    const ids = new Set(sharedWallPreview.map((p) => p.roomId))
+    if (wall.sharedBy.some((id) => ids.has(id))) return null
+  }
 
   const [x1, y1] = wall.from
   const [x2, y2] = wall.to
@@ -51,8 +57,14 @@ export function DoorMark({ door, wall, scale }: Props) {
   // 弧の中心は開口の端 a 側 (single-swing は片開き)
   // 弧の半径 = door.width (90° 開けた時の扇形)
   const arcCenterMm = { x: aMm.x, y: aMm.y }
-  // 弧の開始角は壁方向。終了は + 90° (法線方向)。
-  const wallAngleDeg = (Math.atan2(uy, ux) * 180) / Math.PI
+  // §M43: swingInward=true (既定 true 扱い) なら +Y 側に開く (Konva の時計回り 90°)
+  //       swingInward=false なら -Y 側に開く (rotation を -90 してから 90° 弧で逆側に)
+  const isInward = door.swingInward !== false
+  const baseAngleDeg = (Math.atan2(uy, ux) * 180) / Math.PI
+  const wallAngleDeg = isInward ? baseAngleDeg : baseAngleDeg - 90
+  // 扉本体の方向ベクトル (法線)。inward → (-uy, +ux) / outward → (+uy, -ux)
+  const panelNx = isInward ? -uy : uy
+  const panelNy = isInward ? ux : -ux
 
   function handleClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
     select({ kind: 'door', id: door.id })
@@ -86,13 +98,13 @@ export function DoorMark({ door, wall, scale }: Props) {
         strokeWidth={strokeWidth}
         listening={false}
       />
-      {/* 扉本体 (90° 開いた状態の直線) */}
+      {/* 扉本体 (90° 開いた状態の直線)。swingInward により法線方向が反転 */}
       <Line
         points={[
           arcCenterMm.x * scale,
           arcCenterMm.y * scale,
-          (arcCenterMm.x + -uy * door.width) * scale,
-          (arcCenterMm.y + ux * door.width) * scale,
+          (arcCenterMm.x + panelNx * door.width) * scale,
+          (arcCenterMm.y + panelNy * door.width) * scale,
         ]}
         stroke={stroke}
         strokeWidth={strokeWidth}

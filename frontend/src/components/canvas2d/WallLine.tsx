@@ -30,12 +30,26 @@ export function WallLine({ wall, scale }: Props) {
   const addDoor = useFloorplanStore((s) => s.addDoor)
   const moveSharedWall = useFloorplanStore((s) => s.moveSharedWall)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
+  const setSharedWallPreview = useEditorStore((s) => s.setSharedWallPreview)
+  const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
 
   const style = STROKE_BY_TYPE[wall.wallType]
   const isSelected = selected?.kind === 'wall' && selected.id === wall.id
   // §M32: この壁が "ドラッグ中の部屋" に属していたら非表示 (Group 内の輪郭線で置き換わる)
   if (draggingRoomId != null && wall.sharedBy.includes(draggingRoomId)) {
     return null
+  }
+  // §M41: 共有壁ドラッグ中、影響を受ける 2 部屋の他の壁を非表示。
+  // ドラッグ中の壁本体 (sharedBy セットがプレビューと完全一致) は表示し続ける (Konva drag で線が動いている)
+  if (sharedWallPreview.length > 0) {
+    const previewIds = new Set(sharedWallPreview.map((p) => p.roomId))
+    const affects = wall.sharedBy.some((id) => previewIds.has(id))
+    if (affects) {
+      const wallIds = new Set(wall.sharedBy)
+      const sameSet =
+        wallIds.size === previewIds.size && [...wallIds].every((id) => previewIds.has(id))
+      if (!sameSet) return null
+    }
   }
 
   /**
@@ -124,12 +138,47 @@ export function WallLine({ wall, scale }: Props) {
       {...(canResize && {
         dragBoundFunc: (pos: { x: number; y: number }) =>
           isVertical ? { x: pos.x, y: 0 } : { x: 0, y: pos.y },
+        onDragMove: (e: KonvaEventObject<DragEvent>) => {
+          // §M41: ドラッグ中は両側の rect 部屋の新 AABB を sharedWallPreview に publish する
+          const lineNode = e.target
+          const shift = isVertical ? lineNode.x() : lineNode.y()
+          const offsetMm = Math.round(shift / scale)
+          const fp = useFloorplanStore.getState()
+          const floor = fp.floorplan.floors[fp.activeFloorIndex]
+          if (floor == null) return
+          const preview: Array<{ roomId: string; x: number; y: number; w: number; h: number }> = []
+          for (const roomId of wall.sharedBy) {
+            const room = floor.rooms.find((r) => r.id === roomId)
+            if (room == null || room.shape.kind !== 'rect') {
+              setSharedWallPreview([])
+              return
+            }
+            const { x, y, w, h } = room.shape
+            if (isVertical) {
+              const wallX = wall.from[0]
+              if (Math.abs(x - wallX) <= 1) {
+                preview.push({ roomId, x: x + offsetMm, y, w: w - offsetMm, h })
+              } else if (Math.abs(x + w - wallX) <= 1) {
+                preview.push({ roomId, x, y, w: w + offsetMm, h })
+              }
+            } else {
+              const wallY = wall.from[1]
+              if (Math.abs(y - wallY) <= 1) {
+                preview.push({ roomId, x, y: y + offsetMm, w, h: h - offsetMm })
+              } else if (Math.abs(y + h - wallY) <= 1) {
+                preview.push({ roomId, x, y, w, h: h + offsetMm })
+              }
+            }
+          }
+          setSharedWallPreview(preview)
+        },
         onDragEnd: (e: KonvaEventObject<DragEvent>) => {
           const lineNode = e.target
           const shift = isVertical ? lineNode.x() : lineNode.y()
           const offsetMm = Math.round(shift / scale)
           // 視覚オフセットを 0 に戻す (再生成された wall.from/to が正しい位置に来る)
           lineNode.position({ x: 0, y: 0 })
+          setSharedWallPreview([])
           if (offsetMm === 0) return
           moveSharedWall(wall.id, offsetMm)
         },

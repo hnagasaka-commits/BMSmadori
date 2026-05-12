@@ -8,8 +8,9 @@
  *      PivotControls の depthTest=false 表示 + 別個のドラッグハンドラに任せれば衝突は実用上少ない。
  * - リリース時 (PivotControls の onDragEnd) で moveFurniture を呼ぶ → history.push が走る
  */
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { PivotControls } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Floor } from '@/types'
 import { useFloorplanStore } from '@/store/floorplanStore'
@@ -79,9 +80,30 @@ function FurnitureInstanceMesh({
     <PieceMesh key={p.id} piece={p} highlighted={isSelected} />
   ))
 
+  // §M42: OrbitControls を一時的に disable して、家具クリックがカメラを動かさないようにする。
+  // 選択中の PivotControls 操作も drei が自動で controls.enabled=false にするが、
+  // 初回クリック (= select) と PivotControls がまだ挟まっていないドラッグの瞬間も同様に守る。
+  // - useThree から得た controls を直接書き換えるのは react-hooks/immutability で警告される。
+  //   three.js の controls は mutation 前提なので、ref に逃して setter 関数経由で操作する。
+  const r3fControls = useThree((s) => s.controls)
+  const controlsRef = useRef<{ enabled: boolean } | null>(null)
+  useEffect(() => {
+    controlsRef.current =
+      r3fControls != null
+        ? (r3fControls as unknown as { enabled: boolean })
+        : null
+  }, [r3fControls])
+  function setOrbitEnabled(enabled: boolean) {
+    const c = controlsRef.current
+    if (c != null) c.enabled = enabled
+  }
   const onClickSelect = (e: { stopPropagation: () => void }) => {
     e.stopPropagation()
     select({ kind: 'furniture', id })
+    setOrbitEnabled(false)
+  }
+  const onReleaseRestoreControls = () => {
+    setOrbitEnabled(true)
   }
 
   if (!isSelected) {
@@ -90,6 +112,8 @@ function FurnitureInstanceMesh({
         position={[positionMm[0] * MM_TO_M, 0, positionMm[1] * MM_TO_M]}
         rotation={[0, rotation, 0]}
         onPointerDown={onClickSelect}
+        onPointerUp={onReleaseRestoreControls}
+        onPointerLeave={onReleaseRestoreControls}
         ref={groupRef}
       >
         {meshes}
@@ -108,19 +132,31 @@ function FurnitureInstanceMesh({
       disableScaling
       disableRotations
       matrix={startMatrix}
+      onDragStart={() => {
+        // §M42: gizmo ドラッグ中も明示的に OrbitControls を抑止
+        setOrbitEnabled(false)
+      }}
       onDragEnd={() => {
         const g = groupRef.current
-        if (g == null) return
-        // PivotControls は親 group の matrix を直接書き換える。world position を読み戻す
-        const worldPos = new THREE.Vector3()
-        g.getWorldPosition(worldPos)
-        const xMm = Math.round(worldPos.x * M_TO_MM)
-        const zMm = Math.round(worldPos.z * M_TO_MM)
-        if (xMm === positionMm[0] && zMm === positionMm[1]) return
-        moveFurniture(id, [xMm, zMm])
+        if (g != null) {
+          // PivotControls は親 group の matrix を直接書き換える。world position を読み戻す
+          const worldPos = new THREE.Vector3()
+          g.getWorldPosition(worldPos)
+          const xMm = Math.round(worldPos.x * M_TO_MM)
+          const zMm = Math.round(worldPos.z * M_TO_MM)
+          if (xMm !== positionMm[0] || zMm !== positionMm[1]) {
+            moveFurniture(id, [xMm, zMm])
+          }
+        }
+        setOrbitEnabled(true)
       }}
     >
-      <group ref={groupRef} onPointerDown={onClickSelect}>
+      <group
+        ref={groupRef}
+        onPointerDown={onClickSelect}
+        onPointerUp={onReleaseRestoreControls}
+        onPointerLeave={onReleaseRestoreControls}
+      >
         {meshes}
       </group>
     </PivotControls>
