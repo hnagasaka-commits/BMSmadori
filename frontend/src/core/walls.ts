@@ -11,6 +11,18 @@ import { worldEdges } from './edgeKey'
 
 /** rect 部屋の各辺に当たる Wall を生成。`isLocked: false` / `wallType: "partition"` を既定とする */
 const DEFAULT_WALL_TYPE: WallType = 'partition'
+
+/**
+ * §M66 v0.11: 「壁を生成しない」プリセット。
+ * 庭 (garden) は屋外の地面相当で、囲い壁が不要というユーザー要望に応える。
+ * バルコニーは手摺壁を将来追加するため、ここでは含めない。
+ */
+const WALL_LESS_PRESET_IDS: ReadonlySet<string> = new Set(['garden'])
+
+export function isWalllessPreset(presetId: string): boolean {
+  return WALL_LESS_PRESET_IDS.has(presetId)
+}
+
 const DEFAULT_THICKNESS_BY_TYPE: Record<WallType, number> = {
   exterior: 150,
   'load-bearing': 180,
@@ -48,6 +60,8 @@ export function regenerateWallsFromRooms(
   const groups = new Map<string, { seg: Segment; roomIds: string[] }>()
 
   for (const room of rooms) {
+    // §M66 v0.11: 庭 (garden) は壁を生成しない。Room.shape は床プレート用に保持される
+    if (isWalllessPreset(room.presetId)) continue
     const segs = worldEdges(room.shape, room.rotation)
     if (segs == null) continue
     for (const seg of segs) {

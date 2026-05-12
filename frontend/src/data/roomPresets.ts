@@ -142,6 +142,27 @@ export const ROOM_PRESETS: readonly RoomPreset[] = [
     requiresPipeSpace: false,
     preferredWallTypes: ['partition'],
   },
+  // §M65 v0.11: 屋外部屋。バルコニーは壁あり、庭は壁なし (§M66 で wall 生成をスキップ)
+  {
+    id: 'balcony',
+    displayName: 'バルコニー',
+    category: 'outdoor',
+    defaultSize: { w: 1820, h: 910 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['exterior', 'partition'],
+  },
+  {
+    id: 'garden',
+    displayName: '庭',
+    category: 'outdoor',
+    defaultSize: { w: 3640, h: 3640 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['exterior'],
+  },
 ]
 
 export function getPreset(id: string): RoomPreset | undefined {

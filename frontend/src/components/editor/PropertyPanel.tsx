@@ -786,6 +786,7 @@ function HumanProperties({ humanId }: { humanId: string }) {
     s.floorplan.floors[s.activeFloorIndex]?.humanModels.find((x) => x.id === humanId),
   )
   const setHumanHeight = useFloorplanStore((s) => s.setHumanHeight)
+  const rotateHuman = useFloorplanStore((s) => s.rotateHuman)
   const removeHuman = useFloorplanStore((s) => s.removeHuman)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
@@ -802,6 +803,27 @@ function HumanProperties({ humanId }: { humanId: string }) {
         <div className="property-row">
           <span className="label">位置 z (mm)</span>
           <span className="value">{h.position[1]}</span>
+        </div>
+      </div>
+
+      {/* §M64 v0.11: 人物モデルの向きを 90° 単位で変更 */}
+      <div className="property-section">
+        <h3>向き (90° 単位)</h3>
+        <div className="rotation-buttons">
+          {[0, 90, 180, 270].map((deg) => {
+            const rad = (deg * Math.PI) / 180
+            return (
+              <button
+                key={deg}
+                type="button"
+                aria-pressed={Math.abs(h.rotation - rad) < 1e-3}
+                onClick={() => rotateHuman(h.id, rad)}
+                data-testid={`human-rotate-${deg}`}
+              >
+                {deg}°
+              </button>
+            )
+          })}
         </div>
       </div>
 

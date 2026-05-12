@@ -300,6 +300,8 @@ export type FloorplanState = {
   removeHuman: (humanId: string) => void
   moveHuman: (humanId: string, position: readonly [number, number]) => void
   setHumanHeight: (humanId: string, height: number) => void
+  /** §M64 v0.11: 人物モデルの Y 軸回転 (rad) を更新 */
+  rotateHuman: (humanId: string, rotation: number) => void
 
   // I/O (§5.1.2 8 ステップローダー連携、§3.5 localforage)
   /** 現在のプランを localforage に保存 (autosave / 手動保存共通) */
@@ -1353,6 +1355,23 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const clamped = Math.max(500, Math.min(2500, Math.round(height)))
     if (clamped === h.height) return
     const next = { ...h, height: clamped }
+    snapshotForHistory(state.floorplan)
+    const nextHumans = floor.humanModels.map((x, i) => (i === idx ? next : x))
+    set({
+      floorplan: replaceFloor(state.floorplan, { ...floor, humanModels: nextHumans }, floorIdx),
+    })
+  },
+
+  rotateHuman: (humanId, rotation) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    const idx = floor.humanModels.findIndex((h) => h.id === humanId)
+    if (idx < 0) return
+    const h = floor.humanModels[idx]!
+    if (Math.abs(h.rotation - rotation) < 1e-4) return
+    const next = { ...h, rotation }
     snapshotForHistory(state.floorplan)
     const nextHumans = floor.humanModels.map((x, i) => (i === idx ? next : x))
     set({

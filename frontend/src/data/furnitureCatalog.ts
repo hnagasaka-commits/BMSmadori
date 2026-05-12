@@ -476,6 +476,39 @@ const ENTRIES: FurnitureCatalogEntry[] = [
       },
     ],
   },
+  // §M68 v0.11: 3 段ボックス (カラーボックス相当)。
+  // 棚 3 段が見える形で stack。底板〜天板はベース色、棚板は少し濃い色で段を視認可能に。
+  {
+    id: 'storage-box-3tier',
+    displayName: '3 段ボックス',
+    minRoom: { w: 420, h: 320 },
+    pieces: [
+      // 本体外殻 (側板 + 背板を一体の箱で表現)
+      {
+        id: 'body',
+        position: [0, 450, 0],
+        size: [420, 900, 300],
+        shape: 'box',
+        material: { color: '#d9c9a8', roughness: 0.7, metalness: 0.0 },
+      },
+      // 棚板 1 (下段の上)
+      {
+        id: 'shelf-1',
+        position: [0, 305, 5],
+        size: [400, 14, 290],
+        shape: 'box',
+        material: { color: '#a98765', roughness: 0.7, metalness: 0.0 },
+      },
+      // 棚板 2 (中段の上)
+      {
+        id: 'shelf-2',
+        position: [0, 605, 5],
+        size: [400, 14, 290],
+        shape: 'box',
+        material: { color: '#a98765', roughness: 0.7, metalness: 0.0 },
+      },
+    ],
+  },
   {
     id: 'desk-work',
     displayName: 'ワークデスク',

@@ -147,6 +147,9 @@ export function Canvas3D() {
               position={[0, s.yOffsetMm * MM_TO_M, 0]}
             >
               <TexturedScene scene={s.scene} />
+              {/* §M67 v0.11: ドアパネルを独立レイヤーで描画 (wall 描画と完全に分離)。
+                  壁の split 結果に依存しないので、ドアが 3D に出ない不具合を根治する */}
+              <DoorPanelsLayer scene={s.scene} />
               <Furniture furniture={s.floor.furniture} />
               {/* §M61 v0.9: 床ごとに人物モデルを描画 (家具と同様にドラッグ移動 + クリック選択) */}
               <Humans humans={s.floor.humanModels} />
@@ -425,6 +428,74 @@ function FloorPlatePolygonMesh({
 }
 
 /**
+ * §M67 v0.11: ドアパネルを独立レイヤーとして描画する。
+ *
+ * 設計意図:
+ *  - これまでドアパネル mesh は WallWithOpenings の内側 (壁グループ + rotation Y) で描画していた。
+ *    そのため splitWallByOpenings の状態 (cursor バグ / 区間 union の不整合) に強く依存し、
+ *    M56/M60/M63 と度重なる修正を入れても「2D で置いたドアが 3D に出ない」報告が残った。
+ *  - 本レイヤーは `scene.openings` の中の `kind === 'door'` だけを抜き、
+ *    `scene.walls` から id 一致で wall geometry を得て、ワールド系に直接 mesh を立てる。
+ *  - パネルは壁厚 + 20mm の Z 寸法を持ち、壁の両面から少し顔を出すので、
+ *    どの視点からも必ずドアが視認できる。
+ *  - 非表示壁 (M60 hidden=true) でも開口部マッチがあれば描画されるので、
+ *    「壁削除済みでもドアだけ残る」要件を満たす。
+ */
+function DoorPanelsLayer({ scene }: { scene: SceneSpec }) {
+  const wallById = useMemo(() => {
+    const m = new Map<string, WallBox>()
+    for (const w of scene.walls) m.set(w.id, w)
+    return m
+  }, [scene.walls])
+
+  return (
+    <>
+      {scene.openings
+        .filter((op) => op.kind === 'door')
+        .map((op) => {
+          const wall = wallById.get(op.wallId)
+          if (wall == null) return null
+          const total = wall.size[0]
+          if (total < 1) return null
+          const center = -total / 2 + op.positionRatio * total
+          const half = op.width / 2
+          const left = Math.max(-total / 2, center - half)
+          const right = Math.min(total / 2, center + half)
+          const widthMm = right - left
+          if (widthMm < 10) return null
+          const offsetXMm = (left + right) / 2
+          const heightMm = op.height > 0 ? op.height : 2000
+          // §M67: パネル厚 = 壁厚 + 20mm。両面 10mm ずつはみ出すので必ず視認できる。
+          // swingInward に従って中心を ±wallThickness/4 だけずらして「開く向き」のヒントを残す
+          const panelDepthMm = wall.size[2] + 20
+          const offsetZMm = ((op.swingInward !== false) ? -1 : 1) * (wall.size[2] / 4)
+          return (
+            <group
+              key={op.id}
+              position={[wall.center[0] * MM_TO_M, 0, wall.center[2] * MM_TO_M]}
+              rotation={[0, wall.rotationY, 0]}
+            >
+              <mesh
+                position={[
+                  offsetXMm * MM_TO_M,
+                  (op.sillHeight + heightMm / 2) * MM_TO_M,
+                  offsetZMm * MM_TO_M,
+                ]}
+                castShadow
+              >
+                <boxGeometry
+                  args={[widthMm * MM_TO_M, heightMm * MM_TO_M, panelDepthMm * MM_TO_M]}
+                />
+                <meshStandardMaterial color="#6e4f33" roughness={0.55} metalness={0.05} />
+              </mesh>
+            </group>
+          )
+        })}
+    </>
+  )
+}
+
+/**
  * 壁 + 開口部の組み立て。
  * 壁ごとに「自分にぶら下がっている開口部」を集め、壁長を 1 軸に投影して
  * solid 区間と sill/lintel 区間に分割する。CSG は使わないので軽い。
@@ -535,30 +606,13 @@ function WallWithOpenings({
           <meshStandardMaterial {...WINDOW_GLASS_MATERIAL} />
         </mesh>
       ))}
-      {/* §M50 v0.6: ドアパネル (薄板)。swingInward に従って壁厚の 1/3 だけ片側へオフセット */}
-      {segs.doorPanels.map((d, i) => {
-        const offsetZ = (d.swingInward ? -1 : 1) * (wall.size[2] / 3)
-        return (
-          <mesh
-            key={`door-panel-${i}`}
-            position={[
-              d.offsetX * MM_TO_M,
-              (d.y + d.height / 2) * MM_TO_M,
-              offsetZ * MM_TO_M,
-            ]}
-            castShadow
-          >
-            <boxGeometry
-              args={[d.width * MM_TO_M, d.height * MM_TO_M, 30 * MM_TO_M]}
-            />
-            <meshStandardMaterial
-              color="#6e4f33"
-              roughness={0.55}
-              metalness={0.05}
-            />
-          </mesh>
-        )
-      })}
+      {/*
+        §M67 v0.11: ドアパネルは WallWithOpenings 内では描画しない。
+        DoorPanelsLayer (壁外) で `scene.openings` から独立に描画する。
+        - 旧実装は wall の split 結果 (doorPanels[]) を頼っていたが、splitWallByOpenings の
+          バグ修正 (M56/M60/M63) を入れても画面上に出ないケースが残る、というユーザー報告に対応
+        - 独立レイヤー化により wall 表示ロジックと完全に分離し、開口の wallId だけで描画する
+      */}
     </group>
   )
 }
