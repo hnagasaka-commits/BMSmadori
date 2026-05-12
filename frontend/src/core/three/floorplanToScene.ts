@@ -167,13 +167,26 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
     }
   }
 
-  const openings: Opening[] = []
+  const baseOpenings: Opening[] = []
   if (Array.isArray(floor.doors)) {
-    for (const d of floor.doors) openings.push(doorToOpening(d))
+    for (const d of floor.doors) baseOpenings.push(doorToOpening(d))
   }
   if (Array.isArray(floor.windows)) {
-    for (const w of floor.windows) openings.push(windowToOpening(w))
+    for (const w of floor.windows) baseOpenings.push(windowToOpening(w))
   }
+
+  // §M81 v0.16: 同じ直線上に並んでいる別の壁にも開口部を伝播させる。
+  // closet と bedroom など、片方の長辺と他方の短辺が同じ Y (or X) に乗っている時、
+  // regenerateWallsFromRooms はそれぞれを独立した Wall として生成する
+  // (canonicalSegmentKey が端点完全一致を要求するため)。結果として、ドアを置いた
+  // 短い壁には穴が空くが、それを覆う長い壁は solid のままで「壁の中にドアが隠れる」事故が出る。
+  // 解決: 各 opening について、ソース壁と同一直線上 + 開口部範囲がオーバーラップする
+  // 他の壁にも opening を複製する。複製先の positionRatio はその壁の長さに合わせて再計算。
+  const sourceWallsForOpenings: Wall[] = [
+    ...(Array.isArray(floor.walls) ? floor.walls : []),
+    ...(Array.isArray(floor.freestandingWalls) ? floor.freestandingWalls : []),
+  ]
+  const openings = propagateOpeningsToCoplanarWalls(baseOpenings, sourceWallsForOpenings)
 
   const { center, radius } = computeBounds(floorPlates, walls, ceilingHeight)
 
@@ -185,6 +198,72 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
     center,
     radius,
   }
+}
+
+/**
+ * §M81 v0.16: ソース壁と同じ直線上に乗っている別の壁にも開口部を複製する。
+ * canonicalSegmentKey が「端点完全一致」を要求するため、長い壁と短い壁が同じ直線上に
+ * 並ぶ (例: 長い bedroom 北壁の一部分が短い closet 南壁と重なる) と、別々の Wall に
+ * なる → 一方にしかドア穴が空かない → 3D で隠れる、を解決する。
+ */
+function propagateOpeningsToCoplanarWalls(
+  openings: readonly Opening[],
+  walls: readonly Wall[],
+): Opening[] {
+  if (walls.length === 0) return openings.slice()
+  const wallById = new Map(walls.map((w) => [w.id, w]))
+
+  // 2 つの壁が同じ無限直線上にあるか (parallel + 同一直線)
+  const onSameLine = (a: Wall, b: Wall): boolean => {
+    const adx = a.to[0] - a.from[0]
+    const ady = a.to[1] - a.from[1]
+    const bdx = b.to[0] - b.from[0]
+    const bdy = b.to[1] - b.from[1]
+    // 平行判定: 方向ベクトルの cross が 0
+    const cross = adx * bdy - ady * bdx
+    if (Math.abs(cross) > 2) return false
+    // 直線一致判定: b.from が a の無限直線上にある
+    const px = b.from[0] - a.from[0]
+    const py = b.from[1] - a.from[1]
+    const cross2 = px * ady - py * adx
+    return Math.abs(cross2) < 2
+  }
+
+  const result: Opening[] = []
+  for (const op of openings) {
+    result.push(op)
+    const sourceWall = wallById.get(op.wallId)
+    if (sourceWall == null) continue
+
+    const sdx = sourceWall.to[0] - sourceWall.from[0]
+    const sdy = sourceWall.to[1] - sourceWall.from[1]
+    const sLen = Math.hypot(sdx, sdy)
+    if (sLen < 1) continue
+    // 開口部中心のワールド座標
+    const cx = sourceWall.from[0] + sdx * op.positionRatio
+    const cy = sourceWall.from[1] + sdy * op.positionRatio
+
+    for (const w of walls) {
+      if (w.id === op.wallId) continue
+      if (!onSameLine(sourceWall, w)) continue
+      const wdx = w.to[0] - w.from[0]
+      const wdy = w.to[1] - w.from[1]
+      const wLen = Math.hypot(wdx, wdy)
+      if (wLen < 1) continue
+      // 開口部中心を w 上に射影 → t (0..1 で w の中、それ以外は壁外)
+      const px = cx - w.from[0]
+      const py = cy - w.from[1]
+      const t = (px * wdx + py * wdy) / (wLen * wLen)
+      // 開口部の幅 (mm 単位) を w 上の比率に
+      const halfRatio = op.width / 2 / wLen
+      const tLeft = t - halfRatio
+      const tRight = t + halfRatio
+      // 開口部が壁範囲 [0, 1] と少しでも重なるなら伝播
+      if (tRight < 0 || tLeft > 1) continue
+      result.push({ ...op, wallId: w.id, positionRatio: t })
+    }
+  }
+  return result
 }
 
 function wallToBox(
