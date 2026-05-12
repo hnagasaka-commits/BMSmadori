@@ -800,49 +800,91 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
         </div>
       </div>
 
-      {/* §M69 v0.12: 横幅 / 高さ / 奥行きを個別に拡大率で調整。
-          範囲は 0.2〜3.0× (床下の小物〜大判の家具までカバー)。
-          UI は 3 軸の slider + number セットを並べる */}
+      {/* §M111 v0.26: 家具の寸法を cm 単位で入力 (旧 v0.12 の拡大率表示を置換)。
+          カタログ AABB × scale[axis] / 10 で現在の cm を計算し、
+          ユーザー入力 cm から逆算で scale を更新する。範囲は scale 0.2〜3.0× に対応 */}
       <div className="property-section">
-        <h3>サイズ (拡大率)</h3>
-        {([
-          { axis: 0 as const, label: '横幅 (X)', testid: 'furniture-scale-x' },
-          { axis: 1 as const, label: '高さ (Y)', testid: 'furniture-scale-y' },
-          { axis: 2 as const, label: '奥行 (Z)', testid: 'furniture-scale-z' },
-        ]).map(({ axis, label, testid }) => (
-          <div
-            key={axis}
-            className="property-row"
-            style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4, marginBottom: 8 }}
-          >
-            <span className="label" style={{ fontSize: 11 }}>{label}</span>
-            <input
-              type="range"
-              min={0.2}
-              max={3.0}
-              step={0.05}
-              value={scale3[axis]}
-              onChange={(e) => setAxis(axis, Number(e.target.value))}
-              data-testid={`${testid}-slider`}
-              aria-label={`${label} の拡大率`}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--gray-500)' }}>
-              <span>0.2×</span>
-              <input
-                type="number"
-                value={scale3[axis]}
-                step={0.05}
-                min={0.2}
-                max={3.0}
-                onChange={(e) => setAxis(axis, Number(e.target.value))}
-                data-testid={`${testid}-number`}
-                aria-label={`${label} の拡大率 数値入力`}
-                style={{ width: 80, textAlign: 'right' }}
-              />
-              <span>3.0×</span>
-            </div>
-          </div>
-        ))}
+        <h3>サイズ (cm)</h3>
+        {(() => {
+          // カタログのローカル AABB (= scale=1 のときの寸法、mm)
+          let mnX = Infinity, mxX = -Infinity
+          let mnY = Infinity, mxY = -Infinity
+          let mnZ = Infinity, mxZ = -Infinity
+          for (const p of entry?.pieces ?? []) {
+            mnX = Math.min(mnX, p.position[0] - p.size[0] / 2)
+            mxX = Math.max(mxX, p.position[0] + p.size[0] / 2)
+            mnY = Math.min(mnY, p.position[1] - p.size[1] / 2)
+            mxY = Math.max(mxY, p.position[1] + p.size[1] / 2)
+            mnZ = Math.min(mnZ, p.position[2] - p.size[2] / 2)
+            mxZ = Math.max(mxZ, p.position[2] + p.size[2] / 2)
+          }
+          const baseMm: readonly [number, number, number] = Number.isFinite(mnX)
+            ? [mxX - mnX, mxY - mnY, mxZ - mnZ]
+            : [1, 1, 1]
+          const axes = [
+            { axis: 0 as const, label: '横幅 (X)', testid: 'furniture-size-x' },
+            { axis: 1 as const, label: '高さ (Y)', testid: 'furniture-size-y' },
+            { axis: 2 as const, label: '奥行 (Z)', testid: 'furniture-size-z' },
+          ]
+          return axes.map(({ axis, label, testid }) => {
+            const baseCm = baseMm[axis] / 10
+            // 現在の cm = baseCm * scale[axis]、有効スケール 0.2〜3.0 → cm 範囲
+            const minCm = Math.max(1, Math.round(baseCm * 0.2))
+            const maxCm = Math.max(minCm + 1, Math.round(baseCm * 3.0))
+            const currentCm = Math.round(baseCm * scale3[axis])
+            const setCm = (cm: number) => {
+              const clamped = Math.max(minCm, Math.min(maxCm, cm))
+              const newScale = (clamped * 10) / baseMm[axis]
+              setAxis(axis, newScale)
+            }
+            return (
+              <div
+                key={axis}
+                className="property-row"
+                style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4, marginBottom: 8 }}
+              >
+                <span className="label" style={{ fontSize: 11 }}>
+                  {label} (基準 {baseCm.toFixed(0)} cm)
+                </span>
+                <input
+                  type="range"
+                  min={minCm}
+                  max={maxCm}
+                  step={1}
+                  value={currentCm}
+                  onChange={(e) => setCm(Number(e.target.value))}
+                  data-testid={`${testid}-slider`}
+                  aria-label={`${label} の寸法 (cm)`}
+                />
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: 11,
+                    color: 'var(--gray-500)',
+                  }}
+                >
+                  <span>{minCm} cm</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      type="number"
+                      value={currentCm}
+                      step={1}
+                      min={minCm}
+                      max={maxCm}
+                      onChange={(e) => setCm(Number(e.target.value))}
+                      data-testid={`${testid}-number`}
+                      aria-label={`${label} の寸法 (cm) 数値入力`}
+                      style={{ width: 64, textAlign: 'right' }}
+                    />
+                    <span>cm</span>
+                  </span>
+                  <span>{maxCm} cm</span>
+                </div>
+              </div>
+            )
+          })
+        })()}
       </div>
 
       {/* §M107 v0.25: 家具の色を上書き。クリアでカタログ色に戻る */}

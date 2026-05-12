@@ -41,3 +41,46 @@ export function overlapsAny(target: Room, others: readonly Room[]): boolean {
   }
   return false
 }
+
+/**
+ * §M112 v0.26: リサイズ時の AABB を「隣の部屋に食い込んだら接する位置に止める」。
+ *
+ * `proposed` (= ユーザー入力の AABB) と `original` (= 編集開始時の AABB) を比較し、
+ * 外側に拡張した辺だけを `obstacles` の辺で止める。
+ * - L 辺が左に動いた (= proposed.minX < original.minX) のに other.maxX に食い込むなら
+ *   minX を other.maxX に丸める
+ * - 同じく R/T/B 辺で対称に処理
+ *
+ * obstacles と target が初めから重なるケース (= initial state バグ) は無視する。
+ */
+export function clampResizeAgainstObstacles(
+  proposed: Aabb,
+  original: Aabb,
+  obstacles: readonly Aabb[],
+): Aabb {
+  let { minX, minY, maxX, maxY } = proposed
+  for (const o of obstacles) {
+    // open-interval overlap check (touching is OK)
+    if (maxX <= o.minX || minX >= o.maxX) continue
+    if (maxY <= o.minY || minY >= o.maxY) continue
+    // 各方向への "食い込み深さ"
+    const depthRight = maxX - o.minX  // 我々が右に飛び出して other の左辺を超えた量
+    const depthLeft = o.maxX - minX   // 左に飛び出して other の右辺を超えた量
+    const depthBottom = maxY - o.minY
+    const depthTop = o.maxY - minY
+    // どの辺の食い込みが一番浅いか = そこを境界として吸着する
+    const min = Math.min(depthRight, depthLeft, depthBottom, depthTop)
+    if (min === depthRight && maxX > original.maxX) {
+      // 我々の右辺が外側に拡張して obstacle.minX に当たった → 接する位置で止める
+      maxX = o.minX
+    } else if (min === depthLeft && minX < original.minX) {
+      minX = o.maxX
+    } else if (min === depthBottom && maxY > original.maxY) {
+      maxY = o.minY
+    } else if (min === depthTop && minY < original.minY) {
+      minY = o.maxY
+    }
+    // else: 拡張していない方向に既に食い込んでいる (=旧状態でも overlap) → 触らない
+  }
+  return { minX, minY, maxX, maxY }
+}

@@ -18,9 +18,10 @@
 import { Rect } from 'react-konva'
 import type Konva from 'konva'
 import type { Room } from '@/types'
-import { useFloorplanStore } from '@/store/floorplanStore'
+import { selectRooms, useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
-import { polygonVertices } from '@/core/geometry'
+import { polygonVertices, shapeAabb } from '@/core/geometry'
+import { clampResizeAgainstObstacles } from '@/core/collision'
 
 const HANDLE_SIZE_PX = 10
 const MIN_DIMENSION_MM = 500
@@ -49,6 +50,8 @@ export function RoomResizeHandles({ room, scale, gridSize: _gridSize }: Props) {
   const setResizePreview = useEditorStore((s) => s.setResizePreview)
   const setDraggingRoomId = useEditorStore((s) => s.setDraggingRoomId)
   const resizePreview = useEditorStore((s) => s.resizePreview)
+  // §M112 v0.26: 隣接部屋を取得 (90° 量子化の AABB のみ obstacles として扱う)
+  const allRooms = useFloorplanStore(selectRooms)
 
   // §M37: polygon 部屋は各頂点に独立した青ハンドルを描画 (1 hop 補正で軸並行を維持)
   if (room.shape.kind === 'polygon') {
@@ -173,9 +176,25 @@ export function RoomResizeHandles({ room, scale, gridSize: _gridSize }: Props) {
     return { x: nx, y: ny, w: nw, h: nh }
   }
 
+  // §M112 v0.26: 隣接部屋の AABB を集めて、リサイズ時のクランプ対象にする。
+  // 同じ部屋自身は除外、90° 量子化されていない部屋 (= roomAabb が null) も除外。
+  function collectObstacles() {
+    if (room.shape.kind !== 'rect') return []
+    const obstacles: { minX: number; minY: number; maxX: number; maxY: number }[] = []
+    for (const r of allRooms) {
+      if (r.id === room.id) continue
+      const rot = ((Math.round(r.rotation / 90) % 4) + 4) % 4
+      if (Math.abs(r.rotation - rot * 90) > 1) continue
+      const a = shapeAabb(r.shape, rot * 90)
+      obstacles.push({ minX: a.minX, minY: a.minY, maxX: a.maxX, maxY: a.maxY })
+    }
+    return obstacles
+  }
+
   /**
    * §M41: ドラッグ中はライブプレビューを editorStore.resizePreview に出すだけ。
    * 壁と床は同じ preview を見て同時に描画 → ずれない。
+   * §M112 v0.26: 隣の部屋に食い込んだら clamp する (= 接する位置で止める)。
    */
   function handleDragMove(anchor: Anchor) {
     return (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -184,7 +203,33 @@ export function RoomResizeHandles({ room, scale, gridSize: _gridSize }: Props) {
       const newCxMm = Math.round(e.target.x() / scale)
       const newCyMm = Math.round(e.target.y() / scale)
       const next = computeResize(room.shape, anchor, newCxMm, newCyMm)
-      setResizePreview({ roomId: room.id, ...next })
+      const origAabb = {
+        minX: room.shape.x,
+        minY: room.shape.y,
+        maxX: room.shape.x + room.shape.w,
+        maxY: room.shape.y + room.shape.h,
+      }
+      const propAabb = {
+        minX: next.x,
+        minY: next.y,
+        maxX: next.x + next.w,
+        maxY: next.y + next.h,
+      }
+      const clamped = clampResizeAgainstObstacles(propAabb, origAabb, collectObstacles())
+      // 最小寸法を再保証 (clamp で潰れた場合は MIN_DIMENSION_MM 以上に戻す)
+      let cw = clamped.maxX - clamped.minX
+      let ch = clamped.maxY - clamped.minY
+      let cx = clamped.minX
+      let cy = clamped.minY
+      if (cw < MIN_DIMENSION_MM) {
+        if (anchor === 'nw' || anchor === 'sw') cx = clamped.maxX - MIN_DIMENSION_MM
+        cw = MIN_DIMENSION_MM
+      }
+      if (ch < MIN_DIMENSION_MM) {
+        if (anchor === 'nw' || anchor === 'ne') cy = clamped.maxY - MIN_DIMENSION_MM
+        ch = MIN_DIMENSION_MM
+      }
+      setResizePreview({ roomId: room.id, x: cx, y: cy, w: cw, h: ch })
     }
   }
 
@@ -203,7 +248,29 @@ export function RoomResizeHandles({ room, scale, gridSize: _gridSize }: Props) {
       const newCyMm =
         Math.round(e.target.y() / scale / FINE_RESIZE_SNAP_MM) * FINE_RESIZE_SNAP_MM
       const next = computeResize(rect, anchor, newCxMm, newCyMm)
-      const ok = resizeRoom(room.id, next)
+      // §M112 v0.26: 隣の部屋に食い込んだら clamp して接する位置に止める。
+      // 結果が MIN_DIMENSION_MM を下回らないよう再保証
+      const origAabb = {
+        minX: rect.x, minY: rect.y, maxX: rect.x + rect.w, maxY: rect.y + rect.h,
+      }
+      const propAabb = {
+        minX: next.x, minY: next.y, maxX: next.x + next.w, maxY: next.y + next.h,
+      }
+      const clamped = clampResizeAgainstObstacles(propAabb, origAabb, collectObstacles())
+      let cw = clamped.maxX - clamped.minX
+      let ch = clamped.maxY - clamped.minY
+      let cx = clamped.minX
+      let cy = clamped.minY
+      if (cw < MIN_DIMENSION_MM) {
+        if (anchor === 'nw' || anchor === 'sw') cx = clamped.maxX - MIN_DIMENSION_MM
+        cw = MIN_DIMENSION_MM
+      }
+      if (ch < MIN_DIMENSION_MM) {
+        if (anchor === 'nw' || anchor === 'ne') cy = clamped.maxY - MIN_DIMENSION_MM
+        ch = MIN_DIMENSION_MM
+      }
+      const final = { x: cx, y: cy, w: cw, h: ch }
+      const ok = resizeRoom(room.id, final)
       setResizePreview(null)
       setDraggingRoomId(null)
       if (!ok) {

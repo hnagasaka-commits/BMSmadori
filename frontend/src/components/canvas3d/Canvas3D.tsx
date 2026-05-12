@@ -250,62 +250,93 @@ function CameraRig({
     camera.lookAt(px + dirX * 10, eyeY, pz + dirZ * 10)
   }, [fpvHumanId, fpvTarget, camera])
 
-  // §M103 v0.23: 矢印キー / WASD で人物モデルを移動。
-  // 移動は camera の現在の向き (XZ 平面に射影) を基準に Forward / Strafe を計算。
-  // 移動後の XZ 位置を moveHuman に流し、camera 位置もメートル単位で同期する。
+  // §M103 v0.23 / §M110 v0.26: 矢印キー / WASD で人物モデルを連続移動 (滑らか)。
+  // 旧 M103 は keydown ごとに 200mm 離散ステップ + moveHuman で履歴を毎回スナップしていた。
+  // M110 で:
+  //   - keydown/keyup でキー状態を Set に保持
+  //   - useFrame で毎フレーム camera.position を delta * speed だけ更新 (連続)
+  //   - moveHuman は「キーがすべて離されたフレーム」だけ呼ぶ (Undo の肥大化防止)
+  //   - 通常 1.4 m/s (歩行)、Shift で 5× (= 7 m/s ダッシュ)
+  const keysHeldRef = useRef<Set<string>>(new Set<string>())
+  const needsHumanSyncRef = useRef(false)
+  // camera を ref に固定して useFrame での mutation を react-hooks/immutability 警告から外す
+  const cameraRef = useRef<typeof camera | null>(null)
   useEffect(() => {
-    if (fpvHumanId == null) return
-    const stepM = 0.2 // 1 回押すごとに 200mm 進む (Shift で 5×)
-    const handleKey = (e: KeyboardEvent) => {
-      let dz = 0  // forward(-) / back(+)
-      let dx = 0  // strafe right(+) / left(-)
-      switch (e.key) {
-        case 'ArrowUp':
-        case 'w':
-        case 'W':
-          dz = -1
-          break
-        case 'ArrowDown':
-        case 's':
-        case 'S':
-          dz = 1
-          break
-        case 'ArrowLeft':
-        case 'a':
-        case 'A':
-          dx = -1
-          break
-        case 'ArrowRight':
-        case 'd':
-        case 'D':
-          dx = 1
-          break
-        default:
-          return
-      }
-      e.preventDefault()
-      // カメラの forward (XZ 投影、Y を 0 にして水平移動に揃える)
-      const forward = new THREE.Vector3()
-      camera.getWorldDirection(forward)
-      forward.y = 0
-      if (forward.lengthSq() < 1e-6) return
-      forward.normalize()
-      const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize()
-      const speed = e.shiftKey ? stepM * 5 : stepM
-      const move = new THREE.Vector3()
-      // dz = -1 (上 / W) → forward 方向へ
-      move.addScaledVector(forward, -dz * speed)
-      move.addScaledVector(right, dx * speed)
-      camera.position.x += move.x
-      camera.position.z += move.z
-      // 人物モデルの XZ を camera 位置に同期 (mm 整数化)
-      const xMm = Math.round(camera.position.x * 1000)
-      const zMm = Math.round(camera.position.z * 1000)
-      moveHuman(fpvHumanId, [xMm, zMm])
+    cameraRef.current = camera
+  }, [camera])
+  useEffect(() => {
+    if (fpvHumanId == null) {
+      keysHeldRef.current.clear()
+      needsHumanSyncRef.current = false
+      return
     }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [fpvHumanId, camera, moveHuman])
+    const MOVE_KEYS = new Set([
+      'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
+      'w', 'a', 's', 'd', 'shift',
+    ])
+    const onDown = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase()
+      if (!MOVE_KEYS.has(k)) return
+      keysHeldRef.current.add(k)
+      e.preventDefault()
+    }
+    const onUp = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase()
+      if (!MOVE_KEYS.has(k)) return
+      keysHeldRef.current.delete(k)
+    }
+    const keys = keysHeldRef.current
+    const onBlur = () => keys.clear()
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', onBlur)
+      keys.clear()
+    }
+  }, [fpvHumanId])
+
+  useFrame((_state, delta) => {
+    if (fpvHumanId == null) return
+    const cam = cameraRef.current
+    if (cam == null) return
+    const keys = keysHeldRef.current
+    let dx = 0
+    let dz = 0
+    if (keys.has('arrowup') || keys.has('w')) dz -= 1
+    if (keys.has('arrowdown') || keys.has('s')) dz += 1
+    if (keys.has('arrowleft') || keys.has('a')) dx -= 1
+    if (keys.has('arrowright') || keys.has('d')) dx += 1
+    if (dx === 0 && dz === 0) {
+      // すべて離された瞬間に 1 回だけ moveHuman を呼ぶ (Undo を 1 段だけ消費)
+      if (needsHumanSyncRef.current) {
+        const xMm = Math.round(cam.position.x * 1000)
+        const zMm = Math.round(cam.position.z * 1000)
+        moveHuman(fpvHumanId, [xMm, zMm])
+        needsHumanSyncRef.current = false
+      }
+      return
+    }
+    // 斜め移動の正規化
+    const len = Math.hypot(dx, dz)
+    dx /= len
+    dz /= len
+    const forward = new THREE.Vector3()
+    cam.getWorldDirection(forward)
+    forward.y = 0
+    if (forward.lengthSq() < 1e-6) return
+    forward.normalize()
+    const right = new THREE.Vector3()
+      .crossVectors(forward, new THREE.Vector3(0, 1, 0))
+      .normalize()
+    const baseSpeed = keys.has('shift') ? 7.0 : 1.4
+    const step = baseSpeed * delta
+    cam.position.x += forward.x * -dz * step + right.x * dx * step
+    cam.position.z += forward.z * -dz * step + right.z * dx * step
+    needsHumanSyncRef.current = true
+  })
 
   if (fpvHumanId != null && fpvTarget != null) {
     return (
