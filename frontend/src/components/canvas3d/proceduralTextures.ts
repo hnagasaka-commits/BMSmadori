@@ -163,80 +163,143 @@ export function makeSidingTexture(): ColorTexture {
 }
 
 /**
- * §M86 v0.18: 家具の "木目" テクスチャ。
- * meshStandardMaterial.map に当てる前提で、ベースは白 + 半透明の暗い縦縞 (木目) と斑点 (節)
- * → mesh の color と乗算されて木目に見える。
+ * §M86 v0.18 / §M88 v0.19: 家具の "木目" テクスチャ。
+ * 白基調 + 半透明の暗い縦縞 (木目) + 斑点 (節) + ベース色をやや変動させる横バンド。
+ * meshStandardMaterial.color と乗算されて、はっきりした木目に見える。
  */
 export function makeFurnitureWoodTexture(): ColorTexture {
   return makeCanvasTexture((ctx, size) => {
+    // ベースは白だが、横方向に板の境目 (3〜5 枚)
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, size, size)
-    // 縦の木目線 (薄い茶色)
-    ctx.fillStyle = 'rgba(80, 50, 20, 0.18)'
-    for (let g = 0; g < 60; g++) {
-      const x = ((g * 23) % size) + ((g * 7) % 5)
+    const plankCount = 4
+    for (let p = 0; p < plankCount; p++) {
+      // 板ごとにかすかな明暗 (色は色補正で表現するため白を base にして alpha で覆う)
+      const shade = (p % 2 === 0) ? 0.0 : 0.08
+      if (shade > 0) {
+        ctx.fillStyle = `rgba(70, 40, 15, ${shade})`
+        ctx.fillRect(0, (p * size) / plankCount, size, size / plankCount)
+      }
+      // 板の境目 (はっきりした濃い線)
+      ctx.fillStyle = 'rgba(40, 20, 5, 0.6)'
+      ctx.fillRect(0, (p * size) / plankCount, size, 2)
+    }
+    // 縦の木目線 (はっきりさせて contrast を上げる)
+    for (let g = 0; g < 90; g++) {
+      const x = ((g * 19) % size) + ((g * 7) % 4)
+      const alpha = 0.20 + ((g * 13) % 15) / 100  // 0.20〜0.35 でランダム
+      ctx.fillStyle = `rgba(70, 40, 15, ${alpha.toFixed(2)})`
       ctx.fillRect(x, 0, 1, size)
     }
-    // 節 (knot): 不規則な小さな楕円
-    ctx.fillStyle = 'rgba(70, 40, 15, 0.32)'
-    for (let i = 0; i < 5; i++) {
-      const x = ((i * 191) % size) + 30
+    // 節 (knot): 数も大きさも増量
+    for (let i = 0; i < 14; i++) {
+      const x = ((i * 191 + 41) % size)
       const y = ((i * 137 + 70) % size)
+      const rx = 5 + (i % 5)
+      const ry = 3 + (i % 3)
+      ctx.fillStyle = `rgba(50, 25, 5, ${(0.4 + (i % 4) / 10).toFixed(2)})`
       ctx.beginPath()
-      ctx.ellipse(x, y, 6 + (i % 3), 3 + (i % 2), 0, 0, Math.PI * 2)
+      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2)
       ctx.fill()
+      // 節の周囲の同心円グレイン
+      ctx.strokeStyle = 'rgba(50, 25, 5, 0.25)'
+      ctx.lineWidth = 1
+      for (let r = 1; r <= 2; r++) {
+        ctx.beginPath()
+        ctx.ellipse(x, y, rx + r * 3, ry + r * 2, 0, 0, Math.PI * 2)
+        ctx.stroke()
+      }
     }
-    // 細かいテクスチャ (砂目)
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)'
-    for (let i = 0; i < 300; i++) {
+    // 細かい砂目
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.12)'
+    for (let i = 0; i < 500; i++) {
       const x = (i * 41) % size
       const y = (i * 73 + 13) % size
       ctx.fillRect(x, y, 1, 1)
     }
-  }, 128)
+  }, 256)
 }
 
 /**
- * §M86 v0.18: 家具の "布" テクスチャ。
- * 経緯糸風のグリッド + 細かいノイズ。mesh.color と乗算されてファブリックに見える。
+ * §M86 v0.18 / §M88 v0.19: 家具の "布" テクスチャ。
+ * 経緯糸風の格子 + 細かい繊維ノイズ。コントラストを強化して見える質感に。
  */
 export function makeFurnitureFabricTexture(): ColorTexture {
   return makeCanvasTexture((ctx, size) => {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, size, size)
-    // 経 (vertical) + 緯 (horizontal) の薄い線で織り目
-    ctx.fillStyle = 'rgba(40, 40, 60, 0.20)'
-    const spacing = 4
+    // 経 (vertical) + 緯 (horizontal) の濃い線で織り目を強調
+    ctx.fillStyle = 'rgba(20, 20, 35, 0.32)'
+    const spacing = 3
     for (let p = 0; p < size; p += spacing) {
-      // 経
       ctx.fillRect(p, 0, 1, size)
-      // 緯 (1px ずらして織りらしさ)
-      ctx.fillRect(0, p + (p % 8 === 0 ? 1 : 0), size, 1)
+      ctx.fillRect(0, p + (p % 6 === 0 ? 1 : 0), size, 1)
     }
-    // 細かいノイズ
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.12)'
-    for (let i = 0; i < 500; i++) {
+    // 太めの経緯 (色のグラデで深さを出す)
+    ctx.fillStyle = 'rgba(0, 0, 10, 0.2)'
+    for (let p = 0; p < size; p += 12) {
+      ctx.fillRect(p, 0, 2, size)
+      ctx.fillRect(0, p, size, 2)
+    }
+    // 繊維ノイズ (短い線)
+    for (let i = 0; i < 900; i++) {
       const x = (i * 37) % size
       const y = (i * 79 + 17) % size
-      ctx.fillRect(x, y, 1, 1)
+      const alpha = ((i * 11) % 25) / 100
+      ctx.fillStyle = `rgba(0, 0, 20, ${alpha.toFixed(2)})`
+      ctx.fillRect(x, y, 2, 1)
     }
-  }, 128)
+  }, 256)
 }
 
 /**
- * §M86 v0.18: 16 進カラー文字列から「暖色系 (= 木目)」「寒色系 (= 布)」の選択ヒントを返す。
- * 真っ白や中間色 (グレー寄り) は null (テクスチャ未適用) を返す。
+ * §M88 v0.19: 家具の "革・金属/塗装" テクスチャ。
+ * 微妙な mottle 模様で「単色べた塗り」を防ぐ。暗い色家具 (黒革ソファ、TV ボード等) 向け。
+ */
+export function makeFurnitureLeatherTexture(): ColorTexture {
+  return makeCanvasTexture((ctx, size) => {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, size, size)
+    // 大きめの mottle: ランダムな円
+    for (let i = 0; i < 50; i++) {
+      const x = (i * 31 + 11) % size
+      const y = (i * 67 + 29) % size
+      const radius = 8 + (i % 10)
+      const alpha = 0.08 + ((i * 7) % 12) / 100
+      ctx.fillStyle = `rgba(0, 0, 0, ${alpha.toFixed(2)})`
+      ctx.beginPath()
+      ctx.arc(x, y, radius, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    // 細かいピンホール (革のしわ)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)'
+    for (let i = 0; i < 600; i++) {
+      const x = (i * 41) % size
+      const y = (i * 73 + 13) % size
+      ctx.fillRect(x, y, 1, 1)
+    }
+  }, 256)
+}
+
+/**
+ * §M86 v0.18 / §M88 v0.19: 16 進カラーから家具テクスチャ種別を選ぶ。
+ *  - 純白系 → null (塗装ものはそのまま)
+ *  - 茶系 (R > G > B かつ R - B > 25) → wood
+ *  - 非常に暗い (max(R,G,B) < 70) → leather
+ *  - それ以外 → fabric
  */
 export function pickFurnitureTextureKind(
   colorHex: string,
-): 'wood' | 'fabric' | null {
+): 'wood' | 'fabric' | 'leather' | null {
   const hex = colorHex.replace('#', '')
   if (hex.length < 6) return null
   const r = parseInt(hex.slice(0, 2), 16)
   const g = parseInt(hex.slice(2, 4), 16)
   const b = parseInt(hex.slice(4, 6), 16)
-  // 非常に明るい (白系) は塗装/メラミンとみなしテクスチャ無し
+  // 純白系は塗装/メラミンとみなしテクスチャ無し
   if (r > 220 && g > 220 && b > 220) return null
+  // 暗い色 (黒革・TV 等) は leather
+  if (Math.max(r, g, b) < 70) return 'leather'
   // 茶系 (R > G > B かつ R - B > 25) は木目
   if (r > g && g > b && r - b > 25) return 'wood'
   // それ以外 (グレー/青/緑) は布

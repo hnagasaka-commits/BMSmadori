@@ -9,7 +9,6 @@ import { listCatalog } from '@/data/furnitureCatalog'
 import { selectRooms, useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import type { Shape } from '@/types'
-import { SeismicPanel } from './SeismicPanel'
 import { shapeAabb } from '@/core/geometry'
 
 /**
@@ -40,8 +39,6 @@ function findFreePlacement(
 
 export function Sidebar() {
   const addRoom = useFloorplanStore((s) => s.addRoom)
-  const generateColumnsByGrid = useFloorplanStore((s) => s.generateColumnsByGrid)
-  const addPipeSpace = useFloorplanStore((s) => s.addPipeSpace)
   const autoFurnishAllRooms = useFloorplanStore((s) => s.autoFurnishAllRooms)
   const addFurniture = useFloorplanStore((s) => s.addFurniture)
   const convertRoomToLShape = useFloorplanStore((s) => s.convertRoomToLShape)
@@ -50,7 +47,6 @@ export function Sidebar() {
   const gridSize = useEditorStore((s) => s.gridSize)
   const select = useEditorStore((s) => s.select)
   const readonly = useEditorStore((s) => s.readonly)
-  const buildingType = useFloorplanStore((s) => s.floorplan.metadata.buildingType)
   // 「L 字に変換」は rect の部屋が選択中のときだけ有効
   const selectedRectRoomId =
     selected?.kind === 'room'
@@ -95,26 +91,6 @@ export function Sidebar() {
     }
     const ok = addRoom({ id, presetId, shape })
     if (ok) select({ kind: 'room', id })
-  }
-
-  function handleGenerateColumns() {
-    if (
-      window.confirm(
-        `現在の部屋の AABB に対して ${gridSize}mm グリッドで柱を一括生成します。既存の柱は置き換えられます。よろしいですか?`,
-      )
-    ) {
-      generateColumnsByGrid(gridSize)
-    }
-  }
-
-  function handleAddPipeSpace() {
-    // 部屋がなければ原点、ある場合は最初の部屋の右上に新規 PS を置く (仮位置)
-    let pos: readonly [number, number] = [0, 0]
-    const firstRoom = rooms[0]
-    if (firstRoom != null && firstRoom.shape.kind === 'rect') {
-      pos = [firstRoom.shape.x + firstRoom.shape.w + 200, firstRoom.shape.y + 200]
-    }
-    addPipeSpace({ position: pos, systems: ['water-supply', 'drainage', 'vent'] })
   }
 
   return (
@@ -208,34 +184,11 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="sidebar-section">
-        <h2>構造体・設備 (Phase 1.5)</h2>
-        <div className="preset-list">
-          {buildingType === 'single-family' && (
-            <button
-              type="button"
-              onClick={handleGenerateColumns}
-              data-testid="generate-columns"
-              disabled={readonly || rooms.length === 0}
-              title="現在の部屋 AABB に 910mm グリッドで柱を一括生成"
-            >
-              <span>柱を 910mm グリッドに自動配置</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={handleAddPipeSpace}
-            data-testid="add-pipespace"
-            disabled={readonly}
-            title="給水・排水・換気を持つ標準 PS を追加"
-          >
-            <span>PS を追加</span>
-          </button>
-        </div>
-      </div>
-
-      {/* §M21 Phase 3: 耐震診断 (壁量計算) */}
-      <SeismicPanel />
+      {/*
+        §M87 v0.19: 「構造体・設備 (Phase 1.5)」「耐震診断 (Phase 3)」セクションは
+        間取り設計タスクには不要というユーザー要望に応じて UI から外した。
+        柱・PS・耐震診断のロジック自体は core/store にまだ残してある (将来オプション)。
+      */}
     </aside>
   )
 }

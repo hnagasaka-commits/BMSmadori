@@ -7,7 +7,6 @@ import { debounce } from 'lodash'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Canvas2D } from '@/components/canvas2d/Canvas2D'
 import { Canvas3D } from '@/components/canvas3d/Canvas3D'
-import { CompliancePanel } from '@/components/editor/CompliancePanel'
 import { PropertyPanel } from '@/components/editor/PropertyPanel'
 import { PsAddBanner } from '@/components/editor/PsAddBanner'
 import { Sidebar } from '@/components/editor/Sidebar'
@@ -173,7 +172,7 @@ export function Editor() {
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <PropertyPanel />
         </div>
-        <CompliancePanel />
+        {/* §M87 v0.19: 法規警告 (CompliancePanel) は UI から外した */}
       </div>
       <StatusBar />
 

@@ -197,9 +197,11 @@ function PieceMesh({
     piece.size[2] * MM_TO_M,
   ]
 
-  // §M86 v0.18: リアルテクスチャモード。color hint から木目 / 布を選び、
-  // material.map に当てて色を modulate する (テクスチャは白基調なので color と乗算で
-  // 模様が出る)。piece ごとに texture を clone して repeat を寸法に合わせる。
+  // §M86 v0.18 / §M88 v0.19: リアルテクスチャモード。
+  // color hint から wood / fabric / leather を選び material.map に当てる。
+  // テクスチャは白基調なので color と乗算で模様が浮かぶ。
+  // §M88 で repeat を密にして (0.2m / タイル)、模様を肉眼ではっきり見えるようにした。
+  // また roughness/metalness も種類別にチューニング (木目=やや mat、布=高 mat、革=半光沢)
   const realistic = useEditorStore((s) => s.realisticFurniture)
   const textures = useTextures()
   const textureKind = realistic ? pickFurnitureTextureKind(piece.material.color) : null
@@ -208,10 +210,12 @@ function PieceMesh({
       ? textures.furnitureWood
       : textureKind === 'fabric'
         ? textures.furnitureFabric
-        : null
-  // piece の大きさに応じて repeat を変える (0.4m で 1 タイル目安)
-  const repeatU = Math.max(0.5, piece.size[0] / 400)
-  const repeatV = Math.max(0.5, Math.max(piece.size[1], piece.size[2]) / 400)
+        : textureKind === 'leather'
+          ? textures.furnitureLeather
+          : null
+  // piece の大きさに応じて repeat を変える (0.2m で 1 タイル → 模様が密)
+  const repeatU = Math.max(1, piece.size[0] / 200)
+  const repeatV = Math.max(1, Math.max(piece.size[1], piece.size[2]) / 200)
   const tex = useMemo(() => {
     if (sourceTex == null) return null
     const t = sourceTex.clone()
@@ -221,6 +225,22 @@ function PieceMesh({
     t.repeat.set(repeatU, repeatV)
     return t
   }, [sourceTex, repeatU, repeatV])
+
+  // §M88: 種類別 PBR チューニング。realistic=false なら catalog の material をそのまま使う
+  const matRoughness = realistic
+    ? textureKind === 'wood'
+      ? Math.max(0.6, piece.material.roughness)
+      : textureKind === 'fabric'
+        ? Math.max(0.85, piece.material.roughness)
+        : textureKind === 'leather'
+          ? 0.55
+          : piece.material.roughness
+    : piece.material.roughness
+  const matMetalness = realistic
+    ? textureKind === 'leather'
+      ? 0.12
+      : Math.min(0.05, piece.material.metalness)
+    : piece.material.metalness
 
   if (piece.shape === 'cylinder') {
     const radius = size[1] / 2
@@ -235,8 +255,8 @@ function PieceMesh({
         <meshStandardMaterial
           {...(tex != null && { map: tex })}
           color={piece.material.color}
-          roughness={piece.material.roughness}
-          metalness={piece.material.metalness}
+          roughness={matRoughness}
+          metalness={matMetalness}
           emissive={highlighted ? '#3b82f6' : '#000000'}
           emissiveIntensity={highlighted ? 0.25 : 0}
         />
@@ -254,8 +274,8 @@ function PieceMesh({
       <meshStandardMaterial
         {...(tex != null && { map: tex })}
         color={piece.material.color}
-        roughness={piece.material.roughness}
-        metalness={piece.material.metalness}
+        roughness={matRoughness}
+        metalness={matMetalness}
         emissive={highlighted ? '#3b82f6' : '#000000'}
         emissiveIntensity={highlighted ? 0.25 : 0}
       />

@@ -46,6 +46,7 @@ export function TopBar() {
   const canRedo = useHistoryStore(selectCanRedo)
   const reset = useFloorplanStore((s) => s.reset)
   const saveLocal = useFloorplanStore((s) => s.saveLocal)
+  const updateMetadata = useFloorplanStore((s) => s.updateMetadata)
   const exportJson = useFloorplanStore((s) => s.exportJson)
   const importJsonAction = useFloorplanStore((s) => s.importJson)
   const tool = useEditorStore((s) => s.tool)
@@ -259,7 +260,36 @@ export function TopBar() {
       >
         <ArrowLeft size={14} />
       </button>
-      <h1>間取りプランナー</h1>
+      {/* §M89 v0.19: 旧 h1「間取りプランナー」を、編集可能なプラン名入力に置換。
+          input.value が空の場合は placeholder を表示。変更は updateMetadata で
+          履歴に乗せた snapshot として保存される (Undo 1 回で前の名前に戻る) */}
+      <input
+        type="text"
+        value={planName}
+        placeholder="プラン名を入力"
+        onChange={(e) => updateMetadata({ name: e.target.value })}
+        disabled={readonly}
+        data-testid="plan-name-input"
+        aria-label="間取りプラン名"
+        style={{
+          fontSize: 16,
+          fontWeight: 600,
+          padding: '4px 8px',
+          border: '1px solid transparent',
+          borderRadius: 4,
+          background: 'transparent',
+          minWidth: 180,
+          maxWidth: 360,
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = '#3b82f6'
+          e.currentTarget.style.background = '#fff'
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = 'transparent'
+          e.currentTarget.style.background = 'transparent'
+        }}
+      />
 
       <div className="actions" style={{ marginLeft: 16 }}>
         <button
