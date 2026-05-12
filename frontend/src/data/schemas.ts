@@ -124,6 +124,8 @@ const FurnitureInstanceSchema = z.object({
     .optional(),
   // §M94 v0.21: 床からの Y オフセット (mm)。重なり時に他家具の天面に乗る用途
   y: z.number().nonnegative().optional(),
+  // §M107 v0.25: 16 進カラー (#rrggbb) で全パーツの色を上書き
+  colorOverride: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 })
 
 const HumanModelSchema = z.object({
@@ -204,6 +206,8 @@ const RoomSchema = z.object({
       requiresPipeSpace: z.boolean().optional(),
     })
     .optional(),
+  // §M109 v0.25: 床テクスチャの上書き
+  floorMaterial: z.enum(['wood', 'kitchen', 'tile', 'concrete', 'grass']).optional(),
 })
 
 // ============================================================================
@@ -328,6 +332,8 @@ const FloorplanMetadataSchema = z.object({
       templateVersion: z.string(),
     })
     .optional(),
+  // §M108 v0.25: 壁紙色の上書き
+  wallpaperColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 })
 
 const BuildingPropertiesSchema = z.object({

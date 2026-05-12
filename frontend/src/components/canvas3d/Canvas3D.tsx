@@ -549,7 +549,8 @@ function FloorPlates({ scene, textures }: { scene: SceneSpec; textures: TextureB
   return (
     <>
       {scene.floorPlates.map((plate) => {
-        const kind = pickFloorTextureKind(plate.presetId)
+        // §M109 v0.25: 部屋ごとの floorMaterial 上書きが優先、無ければ preset 既定
+        const kind = plate.floorMaterial ?? pickFloorTextureKind(plate.presetId)
         // §M71 v0.12: grass を選択肢に追加
         const sourceTex =
           kind === 'wood'
@@ -1231,6 +1232,15 @@ function WallWithOpenings({
     () => repeatedClone(sourceTexture, { w: wallLen, h: wallH }),
     [sourceTexture, wallLen, wallH],
   )
+  // §M108 v0.25: 壁紙色の上書き (内部壁 / shared / interior / railing 以外の通常壁) に適用。
+  // exterior (外壁・サイディング) は影響しない。
+  const wallpaperColor = useFloorplanStore((s) => s.floorplan.metadata.wallpaperColor)
+  const effectiveColor =
+    wall.kind === 'exterior'
+      ? material.color
+      : wallpaperColor != null
+        ? wallpaperColor
+        : material.color
 
   // §M60 v0.9: 非表示壁 (hiddenWallIds) は壁本体 (solids) と窓ガラスを描かないが、
   // ドアパネルだけは独立して残す。ドアは家具同様ユーザーが置いた要素なので、
@@ -1275,7 +1285,7 @@ function WallWithOpenings({
           />
           <meshStandardMaterial
             map={wallTexture}
-            color={material.color}
+            color={effectiveColor}
             roughness={material.roughness}
             metalness={material.metalness}
           />

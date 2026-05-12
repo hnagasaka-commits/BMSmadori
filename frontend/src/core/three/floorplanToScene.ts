@@ -49,6 +49,11 @@ export type WallBox = {
 export type FloorPlate = {
   id: string
   presetId: string
+  /**
+   * §M109 v0.25: 部屋ごとの床テクスチャ上書き。
+   * undefined なら presetId から `pickFloorTextureKind` で自動選択。
+   */
+  floorMaterial?: 'wood' | 'kitchen' | 'tile' | 'concrete' | 'grass'
 } & (
   | { shapeKind: 'rect'; center: Vec3; size: Vec3 }
   | {
@@ -142,6 +147,7 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
         floorPlates.push({
           id: room.id,
           presetId: room.presetId,
+          ...(room.floorMaterial !== undefined && { floorMaterial: room.floorMaterial }),
           shapeKind: 'rect',
           center: [cx, 0, cz],
           size: [aabb.maxX - aabb.minX, 1, aabb.maxY - aabb.minY],
@@ -156,6 +162,7 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
         floorPlates.push({
           id: room.id,
           presetId: room.presetId,
+          ...(room.floorMaterial !== undefined && { floorMaterial: room.floorMaterial }),
           shapeKind: 'polygon',
           pointsXZ: verts.map(([x, z]) => [x, z] as const),
           center: [cx, 0, cz],

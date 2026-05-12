@@ -121,6 +121,7 @@ function RoomProperties({ roomId }: { roomId: string }) {
   const rotateRoom = useFloorplanStore((s) => s.rotateRoom)
   const removeRoom = useFloorplanStore((s) => s.removeRoom)
   const updateRoomPreset = useFloorplanStore((s) => s.updateRoomPreset)
+  const setRoomFloorMaterial = useFloorplanStore((s) => s.setRoomFloorMaterial)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
   if (room == null) return null
@@ -244,6 +245,37 @@ function RoomProperties({ roomId }: { roomId: string }) {
         <div className="property-row">
           <span className="label">坪</span>
           <span className="value">{areaUnits.tsubo.toFixed(2)}</span>
+        </div>
+      </div>
+
+      {/* §M109 v0.25: 床素材の上書き選択 */}
+      <div className="property-section">
+        <h3>床素材</h3>
+        <div className="property-row">
+          <span className="label">種別</span>
+          <select
+            value={room.floorMaterial ?? '__preset__'}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === '__preset__') {
+                setRoomFloorMaterial(room.id, undefined)
+              } else {
+                setRoomFloorMaterial(
+                  room.id,
+                  v as 'wood' | 'kitchen' | 'tile' | 'concrete' | 'grass',
+                )
+              }
+            }}
+            data-testid="room-floor-material-select"
+            aria-label="床素材"
+          >
+            <option value="__preset__">既定 (preset 由来)</option>
+            <option value="wood">木目フローリング</option>
+            <option value="kitchen">クッションフロア</option>
+            <option value="tile">タイル</option>
+            <option value="concrete">コンクリート</option>
+            <option value="grass">芝生</option>
+          </select>
         </div>
       </div>
 
@@ -715,6 +747,7 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
   const removeFurniture = useFloorplanStore((s) => s.removeFurniture)
   const rotateFurniture = useFloorplanStore((s) => s.rotateFurniture)
   const scaleFurniture = useFloorplanStore((s) => s.scaleFurniture)
+  const setFurnitureColor = useFloorplanStore((s) => s.setFurnitureColor)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
   if (fi == null) return null
@@ -810,6 +843,36 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* §M107 v0.25: 家具の色を上書き。クリアでカタログ色に戻る */}
+      <div className="property-section">
+        <h3>色</h3>
+        <div className="property-row">
+          <span className="label">カラー</span>
+          <input
+            type="color"
+            value={fi.colorOverride ?? '#888888'}
+            onChange={(e) => setFurnitureColor(fi.id, e.target.value)}
+            data-testid="furniture-color-picker"
+            aria-label="家具の色"
+            style={{ width: 40, height: 28, padding: 0, border: 'none', cursor: 'pointer' }}
+          />
+          <button
+            type="button"
+            onClick={() => setFurnitureColor(fi.id, undefined)}
+            data-testid="furniture-color-clear"
+            disabled={fi.colorOverride == null}
+            style={{
+              marginLeft: 6,
+              fontSize: 11,
+              padding: '2px 8px',
+            }}
+            title="カタログのオリジナル色に戻す"
+          >
+            戻す
+          </button>
+        </div>
       </div>
 
       <div className="property-section">

@@ -24,6 +24,13 @@ import { polygonVertices } from '@/core/geometry'
 
 const HANDLE_SIZE_PX = 10
 const MIN_DIMENSION_MM = 500
+/**
+ * §M106 v0.25: リサイズ確定時の細粒度スナップ。
+ * 旧仕様は editorStore.gridSize (= 910 / 455 / 50mm) で吸着していたため、
+ * デフォルト 910mm の状態だと「もう少し細かく寸法を変えたい」が出来なかった。
+ * リサイズに限り 50mm 固定の細粒度に下げて、5cm 単位で自由に変えられるように。
+ */
+const FINE_RESIZE_SNAP_MM = 50
 
 type Anchor = 'nw' | 'ne' | 'sw' | 'se'
 
@@ -33,7 +40,10 @@ type Props = {
   gridSize: number
 }
 
-export function RoomResizeHandles({ room, scale, gridSize }: Props) {
+export function RoomResizeHandles({ room, scale, gridSize: _gridSize }: Props) {
+  // §M106 v0.25: gridSize は API 互換のため受け取るが内部では使わない
+  // (リサイズは FINE_RESIZE_SNAP_MM=50 固定で吸着)
+  void _gridSize
   const resizeRoom = useFloorplanStore((s) => s.resizeRoom)
   const moveRoomVertex = useFloorplanStore((s) => s.moveRoomVertex)
   const setResizePreview = useEditorStore((s) => s.setResizePreview)
@@ -60,8 +70,9 @@ export function RoomResizeHandles({ room, scale, gridSize }: Props) {
             draggable
             data-testid={`room-vertex-${i}`}
             onDragEnd={(e) => {
-              const nx = Math.round(e.target.x() / scale / gridSize) * gridSize
-              const ny = Math.round(e.target.y() / scale / gridSize) * gridSize
+              // §M106 v0.25: polygon 頂点も 50mm 単位で吸着 (旧 gridSize から細粒度化)
+              const nx = Math.round(e.target.x() / scale / FINE_RESIZE_SNAP_MM) * FINE_RESIZE_SNAP_MM
+              const ny = Math.round(e.target.y() / scale / FINE_RESIZE_SNAP_MM) * FINE_RESIZE_SNAP_MM
               const ok = moveRoomVertex(room.id, i, [nx, ny])
               if (!ok) e.target.position({ x: v[0] * scale, y: v[1] * scale })
             }}
@@ -186,9 +197,11 @@ export function RoomResizeHandles({ room, scale, gridSize }: Props) {
     return (e: Konva.KonvaEventObject<DragEvent>) => {
       if (room.shape.kind !== 'rect') return
       const rect = room.shape
-      // §M41: release は gridSize スナップに丸めて確定
-      const newCxMm = Math.round(e.target.x() / scale / gridSize) * gridSize
-      const newCyMm = Math.round(e.target.y() / scale / gridSize) * gridSize
+      // §M106 v0.25: 50mm 単位で吸着 (旧 gridSize=910 だと粗すぎて細かい調整が出来なかった)
+      const newCxMm =
+        Math.round(e.target.x() / scale / FINE_RESIZE_SNAP_MM) * FINE_RESIZE_SNAP_MM
+      const newCyMm =
+        Math.round(e.target.y() / scale / FINE_RESIZE_SNAP_MM) * FINE_RESIZE_SNAP_MM
       const next = computeResize(rect, anchor, newCxMm, newCyMm)
       const ok = resizeRoom(room.id, next)
       setResizePreview(null)

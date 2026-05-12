@@ -23,6 +23,9 @@ export function StatusBar() {
   const activeCeilingHeight =
     useFloorplanStore((s) => s.floorplan.floors[s.activeFloorIndex]?.ceilingHeight) ?? 2400
   const updateFloorMeta = useFloorplanStore((s) => s.updateFloorMeta)
+  // §M108 v0.25: 壁紙の色 (Floorplan 全体に適用)。未設定 (undefined) なら既定色
+  const wallpaperColor = useFloorplanStore((s) => s.floorplan.metadata.wallpaperColor)
+  const updateMetadata = useFloorplanStore((s) => s.updateMetadata)
   const gridSize = useEditorStore((s) => s.gridSize)
   const readonly = useEditorStore((s) => s.readonly)
 
@@ -149,6 +152,32 @@ export function StatusBar() {
           style={{ width: 64, padding: '1px 4px', fontSize: 12 }}
         />
         <span>mm</span>
+      </label>
+      {/* §M108 v0.25: 壁紙の色 (Floorplan 全体)。「戻す」で undefined にして既定色へ */}
+      <label
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8 }}
+        title="3D 内部壁の壁紙色を変更 (外壁サイディングには影響しない)"
+      >
+        <span>壁紙:</span>
+        <input
+          type="color"
+          value={wallpaperColor ?? '#f5f1ea'}
+          onChange={(e) => updateMetadata({ wallpaperColor: e.target.value })}
+          disabled={readonly}
+          data-testid="wallpaper-color-input"
+          aria-label="壁紙の色"
+          style={{ width: 28, height: 22, padding: 0, border: 'none', cursor: 'pointer' }}
+        />
+        <button
+          type="button"
+          onClick={() => updateMetadata({ wallpaperColor: '#f5f1ea' })}
+          disabled={readonly || (wallpaperColor ?? '#f5f1ea') === '#f5f1ea'}
+          data-testid="wallpaper-color-clear"
+          style={{ fontSize: 11, padding: '1px 6px' }}
+          title="既定の壁紙色 (#f5f1ea) に戻す"
+        >
+          ↺
+        </button>
       </label>
     </footer>
   )

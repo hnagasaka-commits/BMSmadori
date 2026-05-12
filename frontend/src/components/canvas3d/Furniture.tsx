@@ -46,6 +46,8 @@ export function Furniture({ furniture }: { furniture: Floor['furniture'] }) {
             rotation={fi.rotation}
             instanceScale3={scale3}
             isSelected={isSelected}
+            // §M107 v0.25: 全パーツの色を上書きするオプション
+            colorOverride={fi.colorOverride}
           />
         )
       })}
@@ -61,6 +63,7 @@ function FurnitureInstanceMesh({
   rotation,
   instanceScale3,
   isSelected,
+  colorOverride,
 }: {
   id: string
   pieces: ReadonlyArray<FurniturePiece>
@@ -71,6 +74,8 @@ function FurnitureInstanceMesh({
   /** §M69 v0.12: 家具のインスタンス拡大率 [X, Y, Z] (1 = 等倍) */
   instanceScale3: readonly [number, number, number]
   isSelected: boolean
+  /** §M107 v0.25: undefined ならカタログ色、文字列なら全パーツをその色で上書き */
+  colorOverride: string | undefined
 }) {
   const select = useEditorStore((s) => s.select)
   const moveFurniture = useFloorplanStore((s) => s.moveFurniture)
@@ -177,6 +182,8 @@ function FurnitureInstanceMesh({
           key={p.id}
           piece={p}
           highlighted={isSelected || isDragging}
+          // §M107 v0.25: 全パーツ共通の色上書き (undefined ならカタログ色)
+          colorOverride={colorOverride}
         />
       ))}
     </group>
@@ -186,9 +193,12 @@ function FurnitureInstanceMesh({
 function PieceMesh({
   piece,
   highlighted,
+  colorOverride,
 }: {
   piece: FurniturePiece
   highlighted: boolean
+  /** §M107 v0.25: 上書きカラー (16 進)。undefined ならカタログ色 */
+  colorOverride: string | undefined
 }) {
   const pos: [number, number, number] = [
     piece.position[0] * MM_TO_M,
@@ -200,6 +210,8 @@ function PieceMesh({
     piece.size[1] * MM_TO_M,
     piece.size[2] * MM_TO_M,
   ]
+  // §M107 v0.25: override 優先
+  const meshColor = colorOverride ?? piece.material.color
 
   if (piece.shape === 'cylinder') {
     const radius = size[1] / 2
@@ -212,7 +224,7 @@ function PieceMesh({
       >
         <cylinderGeometry args={[radius, radius, length, 16]} />
         <meshStandardMaterial
-          color={piece.material.color}
+          color={meshColor}
           roughness={piece.material.roughness}
           metalness={piece.material.metalness}
           emissive={highlighted ? '#3b82f6' : '#000000'}
@@ -230,7 +242,7 @@ function PieceMesh({
     >
       <boxGeometry args={size} />
       <meshStandardMaterial
-        color={piece.material.color}
+        color={meshColor}
         roughness={piece.material.roughness}
         metalness={piece.material.metalness}
         emissive={highlighted ? '#3b82f6' : '#000000'}

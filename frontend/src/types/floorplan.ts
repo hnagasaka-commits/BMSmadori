@@ -82,6 +82,13 @@ export type FloorplanMetadata = {
    */
   disclaimer?: string
   /**
+   * §M108 v0.25: 壁紙の色を上書き (`#rrggbb`)。undefined ならデフォルト (#f5f1ea) を使う。
+   * 3D 描画の `meshStandardMaterial.color` に流れる。texture (壁紙パターン) は据え置きで
+   * color と乗算されるため、テクスチャの陰影は残しつつ全体の色味だけ変えられる。
+   * Floorplan 全体に適用 (= すべての階の全ての壁の内側に効く)。
+   */
+  wallpaperColor?: string
+  /**
    * §6.4.3 テンプレ起点で作成されたプランの由来情報。
    * ユーザーが「ゼロから描く」を選んだ場合は undefined。一度設定したら以降変更しない。
    * Phase 1.5 で導入される PS 追加候補バナーの判断材料に使う。
@@ -154,6 +161,12 @@ export type FurnitureInstance = {
    * 新規家具を載せるロジック (addFurniture / moveFurniture) で自動付与される。
    */
   y?: number
+  /**
+   * §M107 v0.25: 家具全パーツに被せる色 (16 進)。
+   * 設定時は catalog の `piece.material.color` を全て差し替えて単色化する。
+   * undefined ならカタログのオリジナル配色を使う。
+   */
+  colorOverride?: string
 }
 
 /**
@@ -311,6 +324,12 @@ export type PipeSpace = {
 // §5.6 部屋
 // ============================================================================
 
+/**
+ * §M109 v0.25: 床テクスチャ種別。preset から自動選択する場合と、
+ * `Room.floorMaterial` で部屋ごとに上書きする場合がある。
+ */
+export type FloorMaterialKind = 'wood' | 'kitchen' | 'tile' | 'concrete' | 'grass'
+
 export type Room = {
   id: string
   /** §7 RoomPreset.id を参照 */
@@ -323,6 +342,11 @@ export type Room = {
   equipmentOverride?: {
     requiresPipeSpace?: boolean
   }
+  /**
+   * §M109 v0.25: 床テクスチャ種別の上書き。
+   * 未指定なら `pickFloorTextureKind(presetId)` の既定が使われる。
+   */
+  floorMaterial?: FloorMaterialKind
 }
 
 // ============================================================================

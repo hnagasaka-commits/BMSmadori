@@ -166,6 +166,13 @@ export type FloorplanState = {
    * 形状や壁は変えない (compliance だけ次回 schedule で評価し直される)。
    */
   updateRoomPreset: (roomId: string, presetId: string) => boolean
+  /**
+   * §M109 v0.25: 床テクスチャ種別を部屋ごとに上書き (undefined で preset 既定に戻す)
+   */
+  setRoomFloorMaterial: (
+    roomId: string,
+    material: 'wood' | 'kitchen' | 'tile' | 'concrete' | 'grass' | undefined,
+  ) => void
 
   // §M30 自立壁 (部屋に紐づかない手書きの壁)
   /** 自立壁を 1 本追加。from→to は mm、軸並行を期待 */
@@ -294,6 +301,10 @@ export type FloorplanState = {
     furnitureId: string,
     scale: number | readonly [number, number, number],
   ) => void
+  /**
+   * §M107 v0.25: 家具インスタンスの色を上書きする (`undefined` でクリア → カタログ色に戻す)。
+   */
+  setFurnitureColor: (furnitureId: string, color: string | undefined) => void
   /** Sidebar の "部屋に既定家具を入れる" アクション (preset → catalogId 列を Floor.furniture に追加) */
   autoFurnishAllRooms: () => number
 
@@ -624,6 +635,31 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     )
     set({ floorplan: replaceFloor(state.floorplan, { ...floor, rooms: nextRooms }, floorIdx) })
     return true
+  },
+
+  setRoomFloorMaterial: (roomId, material) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    const idx = floor.rooms.findIndex((r) => r.id === roomId)
+    if (idx < 0) return
+    const room = floor.rooms[idx]!
+    // §M109 v0.25: undefined で preset 既定に戻す (= floorMaterial キーを削除)
+    if (material === undefined) {
+      if (room.floorMaterial === undefined) return
+      const { floorMaterial: _drop, ...rest } = room
+      void _drop
+      const nextRooms = floor.rooms.map((r, i) => (i === idx ? rest : r))
+      snapshotForHistory(state.floorplan)
+      set({ floorplan: replaceFloor(state.floorplan, { ...floor, rooms: nextRooms }, floorIdx) })
+      return
+    }
+    if (room.floorMaterial === material) return
+    const next = { ...room, floorMaterial: material }
+    const nextRooms = floor.rooms.map((r, i) => (i === idx ? next : r))
+    snapshotForHistory(state.floorplan)
+    set({ floorplan: replaceFloor(state.floorplan, { ...floor, rooms: nextRooms }, floorIdx) })
   },
 
   resizeRoom: (roomId, next) => {
@@ -1318,6 +1354,32 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     })()
     if (sameAsPrev) return
     const next: FurnitureInstance = { ...f, scale: nextScale }
+    snapshotForHistory(state.floorplan)
+    const nextFurniture = floor.furniture.map((x, i) => (i === idx ? next : x))
+    set({
+      floorplan: replaceFloor(state.floorplan, { ...floor, furniture: nextFurniture }, floorIdx),
+    })
+  },
+
+  setFurnitureColor: (furnitureId, color) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    const idx = floor.furniture.findIndex((f) => f.id === furnitureId)
+    if (idx < 0) return
+    const f = floor.furniture[idx]!
+    // §M107 v0.25: undefined or '' で colorOverride を削除 (= カタログ色に戻す)
+    const valid = color != null && color.length > 0 ? color : undefined
+    if (f.colorOverride === valid) return
+    const next: FurnitureInstance =
+      valid !== undefined
+        ? { ...f, colorOverride: valid }
+        : (() => {
+            const { colorOverride: _drop, ...rest } = f
+            void _drop
+            return rest
+          })()
     snapshotForHistory(state.floorplan)
     const nextFurniture = floor.furniture.map((x, i) => (i === idx ? next : x))
     set({
