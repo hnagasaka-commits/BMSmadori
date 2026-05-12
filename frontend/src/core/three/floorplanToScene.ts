@@ -78,6 +78,12 @@ export type Opening = {
   positionRatio: number
   /** §M50 v0.6: ドアパネルを壁の内側 / 外側どちらに描くか (door のみ) */
   swingInward?: boolean
+  /**
+   * §M82 v0.17: 同一直線上の別の壁に伝播されたコピー (M81)。
+   * 壁の穴を空ける用途のみで、ドアパネル本体は元の wallId 上に 1 枚だけ立てる。
+   * true の場合 DoorPanelsLayer はパネル描画をスキップする。
+   */
+  isPropagated?: boolean
 }
 
 export type SceneSpec = {
@@ -147,13 +153,23 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
     for (const room of floor.rooms) roomById.set(room.id, room)
   }
 
+  // §M83 v0.17: balcony 外周壁を railing にする判定は、その壁が
+  // 「家側に重なる別の壁を持たない」純粋な exterior であることを要求する。
+  // 例: balcony の長い左辺が複数の家側部屋の右辺と同じ直線上に並んでいる場合、
+  // その左辺は sharedBy=[balcony] のみだが、実際は家の境界面なので railing 化しない。
+  const allRawWalls: Wall[] = [
+    ...(Array.isArray(floor.walls) ? floor.walls : []),
+    ...(Array.isArray(floor.freestandingWalls) ? floor.freestandingWalls : []),
+  ]
+  const railingWallIds = computeRailingWallIds(allRawWalls, roomById)
+
   const walls: WallBox[] = []
   // §M30 / §M60 v0.9: hiddenWallIds は壁本体を非表示にするが、
   // 載っているドア/窓は引き続き 3D に出したいので、WallBox は hidden=true で残す
   const hidden = new Set(floor.hiddenWallIds ?? [])
   if (Array.isArray(floor.walls)) {
     for (const wall of floor.walls) {
-      const wb = wallToBox(wall, ceilingHeight, roomById)
+      const wb = wallToBox(wall, ceilingHeight, roomById, railingWallIds)
       if (wb == null) continue
       if (hidden.has(wall.id)) wb.hidden = true
       walls.push(wb)
@@ -162,7 +178,7 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
   // §M30: freestandingWalls も 3D に出す
   if (Array.isArray(floor.freestandingWalls)) {
     for (const wall of floor.freestandingWalls) {
-      const wb = wallToBox(wall, ceilingHeight, roomById)
+      const wb = wallToBox(wall, ceilingHeight, roomById, railingWallIds)
       if (wb != null) walls.push(wb)
     }
   }
@@ -201,6 +217,25 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
 }
 
 /**
+ * §M81 v0.16: 2 つの壁が同じ無限直線上にあるか (parallel + 同一直線)。
+ * §M83 v0.17 で railing 判定にも使うため、関数スコープに切り出す。
+ */
+function wallsOnSameLine(a: Wall, b: Wall): boolean {
+  const adx = a.to[0] - a.from[0]
+  const ady = a.to[1] - a.from[1]
+  const bdx = b.to[0] - b.from[0]
+  const bdy = b.to[1] - b.from[1]
+  // 平行判定: 方向ベクトルの cross が 0
+  const cross = adx * bdy - ady * bdx
+  if (Math.abs(cross) > 2) return false
+  // 直線一致判定: b.from が a の無限直線上にある
+  const px = b.from[0] - a.from[0]
+  const py = b.from[1] - a.from[1]
+  const cross2 = px * ady - py * adx
+  return Math.abs(cross2) < 2
+}
+
+/**
  * §M81 v0.16: ソース壁と同じ直線上に乗っている別の壁にも開口部を複製する。
  * canonicalSegmentKey が「端点完全一致」を要求するため、長い壁と短い壁が同じ直線上に
  * 並ぶ (例: 長い bedroom 北壁の一部分が短い closet 南壁と重なる) と、別々の Wall に
@@ -212,22 +247,6 @@ function propagateOpeningsToCoplanarWalls(
 ): Opening[] {
   if (walls.length === 0) return openings.slice()
   const wallById = new Map(walls.map((w) => [w.id, w]))
-
-  // 2 つの壁が同じ無限直線上にあるか (parallel + 同一直線)
-  const onSameLine = (a: Wall, b: Wall): boolean => {
-    const adx = a.to[0] - a.from[0]
-    const ady = a.to[1] - a.from[1]
-    const bdx = b.to[0] - b.from[0]
-    const bdy = b.to[1] - b.from[1]
-    // 平行判定: 方向ベクトルの cross が 0
-    const cross = adx * bdy - ady * bdx
-    if (Math.abs(cross) > 2) return false
-    // 直線一致判定: b.from が a の無限直線上にある
-    const px = b.from[0] - a.from[0]
-    const py = b.from[1] - a.from[1]
-    const cross2 = px * ady - py * adx
-    return Math.abs(cross2) < 2
-  }
 
   const result: Opening[] = []
   for (const op of openings) {
@@ -245,7 +264,7 @@ function propagateOpeningsToCoplanarWalls(
 
     for (const w of walls) {
       if (w.id === op.wallId) continue
-      if (!onSameLine(sourceWall, w)) continue
+      if (!wallsOnSameLine(sourceWall, w)) continue
       const wdx = w.to[0] - w.from[0]
       const wdy = w.to[1] - w.from[1]
       const wLen = Math.hypot(wdx, wdy)
@@ -260,8 +279,66 @@ function propagateOpeningsToCoplanarWalls(
       const tRight = t + halfRatio
       // 開口部が壁範囲 [0, 1] と少しでも重なるなら伝播
       if (tRight < 0 || tLeft > 1) continue
-      result.push({ ...op, wallId: w.id, positionRatio: t })
+      // §M82 v0.17: 伝播コピーは isPropagated=true でマーク。
+      // 壁の穴掘り (splitWallByOpenings) はこれも処理するが、ドアパネル本体は
+      // DoorPanelsLayer で 1 枚だけ描画されるよう、こちらをスキップする
+      result.push({ ...op, wallId: w.id, positionRatio: t, isPropagated: true })
     }
+  }
+  return result
+}
+
+/**
+ * §M83 v0.17: railing として描画するべき壁の id を抽出する。
+ *
+ * 条件:
+ *  - `sharedBy.length === 1` で唯一の部屋が balcony プリセット
+ *  - **かつ** 同一直線上に balcony 以外の部屋に属する別の壁が存在しない
+ *    (= 純粋に屋外に面している外周)
+ *
+ * 後者の条件があるおかげで、balcony の長い辺が家側の複数部屋の短い辺と
+ * 並んでいるケース (例: closet/living/bedroom が縦に並ぶ家の右側に貼り付く balcony)
+ * では、balcony 側の長い壁が "家側の境界" として通常壁のまま残る。
+ */
+function computeRailingWallIds(
+  walls: readonly Wall[],
+  roomById: ReadonlyMap<string, Room>,
+): Set<string> {
+  const result = new Set<string>()
+  // 線分の重なり判定 (axis-aligned 専用の簡易版でなく、parallel 系で扱える generic 版)
+  const segmentsOverlap = (a: Wall, b: Wall): boolean => {
+    // a の方向に b の両端を射影し、a の [0, 1] と重なるか
+    const adx = a.to[0] - a.from[0]
+    const ady = a.to[1] - a.from[1]
+    const len2 = adx * adx + ady * ady
+    if (len2 < 1) return false
+    const projT = (p: readonly [number, number]) =>
+      ((p[0] - a.from[0]) * adx + (p[1] - a.from[1]) * ady) / len2
+    const t1 = projT(b.from)
+    const t2 = projT(b.to)
+    const lo = Math.min(t1, t2)
+    const hi = Math.max(t1, t2)
+    // 端点が一致するだけでなく、内部が重なる ([0, 1] とのオーバーラップ幅が 1mm 超)
+    const overlap = Math.min(hi, 1) - Math.max(lo, 0)
+    return overlap * Math.sqrt(len2) > 1
+  }
+
+  for (const w of walls) {
+    if (w.sharedBy.length !== 1) continue
+    const room = roomById.get(w.sharedBy[0]!)
+    if (room?.presetId !== 'balcony') continue
+    // 同一直線上にあって balcony 以外の部屋を持つ別の壁があれば、家側の境界とみなす
+    const hasHouseSideOverlap = walls.some((other) => {
+      if (other.id === w.id) return false
+      if (!wallsOnSameLine(w, other)) return false
+      if (!segmentsOverlap(w, other)) return false
+      // other の sharedBy に balcony 以外の部屋が含まれるか
+      return other.sharedBy.some((rid) => {
+        const r = roomById.get(rid)
+        return r != null && r.presetId !== 'balcony'
+      })
+    })
+    if (!hasHouseSideOverlap) result.add(w.id)
   }
   return result
 }
@@ -270,6 +347,7 @@ function wallToBox(
   wall: Wall,
   ceilingHeight: number,
   roomById: ReadonlyMap<string, Room>,
+  railingWallIds: ReadonlySet<string>,
 ): WallBox | null {
   const [x1, y1] = wall.from
   const [x2, y2] = wall.to
@@ -284,16 +362,12 @@ function wallToBox(
   const sizeY = wall.height ?? ceilingHeight
   const rotationY = -Math.atan2(dy, dx)
 
-  // §M70 v0.12: balcony の外周壁 (= sharedBy が balcony 1 件だけ) は railing とする。
-  // sharedBy.length === 1 で唯一の部屋が balcony プリセットの時に限定 (家側に接する壁は通常壁)
-  const balconyRoom =
-    wall.sharedBy.length === 1
-      ? (() => {
-          const r = roomById.get(wall.sharedBy[0]!)
-          return r != null && r.presetId === 'balcony' ? r : null
-        })()
-      : null
-  const isBalconyRailing = balconyRoom != null
+  // §M70 v0.12 / §M83 v0.17: balcony 外周壁を railing にする。
+  // 判定は computeRailingWallIds で「同一直線上に家側の壁が無い」純粋な exterior に絞られている
+  const isBalconyRailing = railingWallIds.has(wall.id)
+  const balconyRoom = isBalconyRailing
+    ? (roomById.get(wall.sharedBy[0]!) ?? null)
+    : null
 
   const kind: WallBox['kind'] = isBalconyRailing
     ? 'railing'

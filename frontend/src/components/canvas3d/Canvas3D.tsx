@@ -575,7 +575,8 @@ function DoorPanelsLayer({ scene }: { scene: SceneSpec }) {
   return (
     <>
       {scene.openings
-        .filter((op) => op.kind === 'door')
+        // §M82 v0.17: 伝播コピーはパネル描画から除外 (1 ドア = 1 パネル)
+        .filter((op) => op.kind === 'door' && !op.isPropagated)
         .map((op) => {
           const wall = wallById.get(op.wallId)
           if (wall == null) return null
