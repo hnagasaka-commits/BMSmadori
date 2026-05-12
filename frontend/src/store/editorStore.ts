@@ -16,6 +16,8 @@ export type SelectedElement =
   | { kind: 'furniture'; id: string }
   /** §11 Phase 3 / M20: 柱 (loadBearing 編集 + 通し柱整合のため) */
   | { kind: 'column'; id: string }
+  /** §M61 v0.9: 3D 中で選択された人物モデル (スケール感の確認用) */
+  | { kind: 'human'; id: string }
   | null
 
 /**

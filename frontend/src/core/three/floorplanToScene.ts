@@ -22,6 +22,11 @@ export type WallBox = {
   rotationY: number
   /** wallType 由来。マテリアル切替に使う */
   kind: 'exterior' | 'shared' | 'interior'
+  /**
+   * §M60 v0.9: 非表示フラグ。hiddenWallIds に含まれる壁は wall 本体は描かないが、
+   * 載っているドア/窓のヒント (= 開口部マッチ) は引き続き使うため WallBox 自体は残す。
+   */
+  hidden?: boolean
 }
 
 /**
@@ -126,13 +131,15 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
   }
 
   const walls: WallBox[] = []
-  // §M30: hiddenWallIds は 3D でも非表示にする
+  // §M30 / §M60 v0.9: hiddenWallIds は壁本体を非表示にするが、
+  // 載っているドア/窓は引き続き 3D に出したいので、WallBox は hidden=true で残す
   const hidden = new Set(floor.hiddenWallIds ?? [])
   if (Array.isArray(floor.walls)) {
     for (const wall of floor.walls) {
-      if (hidden.has(wall.id)) continue
       const wb = wallToBox(wall, ceilingHeight)
-      if (wb != null) walls.push(wb)
+      if (wb == null) continue
+      if (hidden.has(wall.id)) wb.hidden = true
+      walls.push(wb)
     }
   }
   // §M30: freestandingWalls も 3D に出す
@@ -204,12 +211,18 @@ function doorToOpening(d: Door): Opening {
 }
 
 function windowToOpening(w: FpWindow): Opening {
+  // §M59 v0.9: Window.sillHeight (床から窓下端までの mm) を 3D に反映。
+  // 0 以上の有限値なら採用し、未定義/負値なら既定 (800mm) にフォールバック
+  const sill =
+    typeof w.sillHeight === 'number' && Number.isFinite(w.sillHeight) && w.sillHeight >= 0
+      ? w.sillHeight
+      : DEFAULT_WINDOW_SILL_MM
   return {
     id: w.id,
     wallId: w.wallId,
     kind: 'window',
     width: w.width,
-    sillHeight: DEFAULT_WINDOW_SILL_MM,
+    sillHeight: sill,
     height: w.height > 0 ? w.height : DEFAULT_WINDOW_HEIGHT_MM,
     positionRatio: w.positionRatio,
   }

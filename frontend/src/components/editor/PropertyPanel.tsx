@@ -88,6 +88,13 @@ export function PropertyPanel() {
     return <ColumnProperties columnId={c.id} />
   }
 
+  // §M61 / §M62 v0.9: 3D の人物モデル (大きさ感の確認用)
+  if (selected.kind === 'human') {
+    const h = floor?.humanModels.find((x) => x.id === selected.id)
+    if (h == null) return <EmptyPanel message="人物モデルが見つかりません" />
+    return <HumanProperties humanId={h.id} />
+  }
+
   void clearSelection
   return <EmptyPanel message="この要素のプロパティは Phase 1 では未実装です" />
 }
@@ -762,6 +769,82 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
             clearSelection()
           }}
           data-testid="furniture-delete"
+        >
+          削除
+        </button>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * §M61 / §M62 v0.9: 人物モデル (3D で大きさ感を確認する用) のプロパティ。
+ * 身長 (mm) を 500〜2500 で編集 + 削除のみ。位置は 3D 上でドラッグして変更する。
+ */
+function HumanProperties({ humanId }: { humanId: string }) {
+  const h = useFloorplanStore((s) =>
+    s.floorplan.floors[s.activeFloorIndex]?.humanModels.find((x) => x.id === humanId),
+  )
+  const setHumanHeight = useFloorplanStore((s) => s.setHumanHeight)
+  const removeHuman = useFloorplanStore((s) => s.removeHuman)
+  const clearSelection = useEditorStore((s) => s.clearSelection)
+
+  if (h == null) return null
+
+  return (
+    <section className="editor-properties" data-testid="property-panel">
+      <div className="property-section">
+        <h3>人物モデル</h3>
+        <div className="property-row">
+          <span className="label">位置 x (mm)</span>
+          <span className="value">{h.position[0]}</span>
+        </div>
+        <div className="property-row">
+          <span className="label">位置 z (mm)</span>
+          <span className="value">{h.position[1]}</span>
+        </div>
+      </div>
+
+      <div className="property-section">
+        <h3>身長 (mm)</h3>
+        <div className="property-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+          <input
+            type="range"
+            min={500}
+            max={2500}
+            step={10}
+            value={h.height}
+            onChange={(e) => setHumanHeight(h.id, Number(e.target.value))}
+            data-testid="human-height-slider"
+            aria-label="人物モデルの身長 (mm)"
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--gray-500)' }}>
+            <span>500mm</span>
+            <input
+              type="number"
+              value={h.height}
+              step={10}
+              min={500}
+              max={2500}
+              onChange={(e) => setHumanHeight(h.id, Number(e.target.value))}
+              data-testid="human-height-number"
+              aria-label="人物モデルの身長 (mm) 数値入力"
+              style={{ width: 96, textAlign: 'right' }}
+            />
+            <span>2500mm</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="property-section">
+        <button
+          type="button"
+          className="btn danger"
+          onClick={() => {
+            removeHuman(h.id)
+            clearSelection()
+          }}
+          data-testid="human-delete"
         >
           削除
         </button>

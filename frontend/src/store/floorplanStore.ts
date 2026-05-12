@@ -290,6 +290,17 @@ export type FloorplanState = {
   /** Sidebar の "部屋に既定家具を入れる" アクション (preset → catalogId 列を Floor.furniture に追加) */
   autoFurnishAllRooms: () => number
 
+  // §M61 v0.9: HumanModel (3D 上で大きさ感を確認するための人型)
+  addHuman: (input?: {
+    id?: string
+    position?: readonly [number, number]
+    rotation?: number
+    height?: number
+  }) => string | null
+  removeHuman: (humanId: string) => void
+  moveHuman: (humanId: string, position: readonly [number, number]) => void
+  setHumanHeight: (humanId: string, height: number) => void
+
   // I/O (§5.1.2 8 ステップローダー連携、§3.5 localforage)
   /** 現在のプランを localforage に保存 (autosave / 手動保存共通) */
   saveLocal: () => Promise<void>
@@ -1261,6 +1272,91 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const nextFurniture = floor.furniture.map((x, i) => (i === idx ? next : x))
     set({
       floorplan: replaceFloor(state.floorplan, { ...floor, furniture: nextFurniture }, floorIdx),
+    })
+  },
+
+  // ---------------------------------------------------------------------------
+  // §M61 v0.9: HumanModel — 3D で大きさ感を掴むための人型 (家具と並ぶ entity)
+  // ---------------------------------------------------------------------------
+  addHuman: (input) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return null
+    const id = input?.id ?? crypto.randomUUID()
+    const px = input?.position ? Math.round(input.position[0]) : 0
+    const pz = input?.position ? Math.round(input.position[1]) : 0
+    const heightMm =
+      typeof input?.height === 'number' && Number.isFinite(input.height) && input.height > 0
+        ? Math.max(500, Math.min(2500, Math.round(input.height)))
+        : 1700
+    const human = {
+      id,
+      position: [px, pz] as readonly [number, number],
+      rotation: input?.rotation ?? 0,
+      height: heightMm,
+    }
+    snapshotForHistory(state.floorplan)
+    set({
+      floorplan: replaceFloor(state.floorplan, {
+        ...floor,
+        humanModels: [...floor.humanModels, human],
+      }, floorIdx),
+    })
+    return id
+  },
+
+  removeHuman: (humanId) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    if (!floor.humanModels.some((h) => h.id === humanId)) return
+    snapshotForHistory(state.floorplan)
+    set({
+      floorplan: replaceFloor(state.floorplan, {
+        ...floor,
+        humanModels: floor.humanModels.filter((h) => h.id !== humanId),
+      }, floorIdx),
+    })
+  },
+
+  moveHuman: (humanId, position) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    const idx = floor.humanModels.findIndex((h) => h.id === humanId)
+    if (idx < 0) return
+    const h = floor.humanModels[idx]!
+    const next = {
+      ...h,
+      position: [Math.round(position[0]), Math.round(position[1])] as readonly [number, number],
+    }
+    if (next.position[0] === h.position[0] && next.position[1] === h.position[1]) return
+    snapshotForHistory(state.floorplan)
+    const nextHumans = floor.humanModels.map((x, i) => (i === idx ? next : x))
+    set({
+      floorplan: replaceFloor(state.floorplan, { ...floor, humanModels: nextHumans }, floorIdx),
+    })
+  },
+
+  setHumanHeight: (humanId, height) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    const idx = floor.humanModels.findIndex((h) => h.id === humanId)
+    if (idx < 0) return
+    const h = floor.humanModels[idx]!
+    // §M62 v0.9: 身長は 500mm 〜 2500mm の範囲にクランプ (子供〜長身大人をカバー)
+    const clamped = Math.max(500, Math.min(2500, Math.round(height)))
+    if (clamped === h.height) return
+    const next = { ...h, height: clamped }
+    snapshotForHistory(state.floorplan)
+    const nextHumans = floor.humanModels.map((x, i) => (i === idx ? next : x))
+    set({
+      floorplan: replaceFloor(state.floorplan, { ...floor, humanModels: nextHumans }, floorIdx),
     })
   },
 

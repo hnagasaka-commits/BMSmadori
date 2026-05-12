@@ -35,6 +35,7 @@ import {
   WINDOW_GLASS_MATERIAL,
 } from './materials'
 import { Furniture } from './Furniture'
+import { Humans } from './Humans'
 import { pickFloorTextureKind } from './proceduralTextures'
 import { repeatedClone, useTextures, type TextureBundle } from './useTextures'
 
@@ -104,6 +105,7 @@ export function Canvas3D() {
       }}
     >
       <LightingSwitcher />
+      <HumanToolbar centerMm={[groundScene.center[0], groundScene.center[2]]} />
       <Canvas
         shadows
         onPointerMissed={clearSelection}
@@ -146,6 +148,8 @@ export function Canvas3D() {
             >
               <TexturedScene scene={s.scene} />
               <Furniture furniture={s.floor.furniture} />
+              {/* §M61 v0.9: 床ごとに人物モデルを描画 (家具と同様にドラッグ移動 + クリック選択) */}
+              <Humans humans={s.floor.humanModels} />
             </group>
           ))}
 
@@ -486,12 +490,15 @@ function WallWithOpenings({
     [sourceTexture, wallLen, wallH],
   )
 
+  // §M60 v0.9: 非表示壁 (hiddenWallIds) は壁本体 (solids) と窓ガラスを描かないが、
+  // ドアパネルだけは独立して残す。ドアは家具同様ユーザーが置いた要素なので、
+  // 壁を消した瞬間に 3D から消えるのは不便というフィードバックに対応
   return (
     <group
       position={[wall.center[0] * MM_TO_M, 0, wall.center[2] * MM_TO_M]}
       rotation={[0, wall.rotationY, 0]}
     >
-      {segs.solids.map((s, i) => (
+      {!wall.hidden && segs.solids.map((s, i) => (
         <mesh
           key={`solid-${i}`}
           position={[s.offsetX * MM_TO_M, (s.y + s.height / 2) * MM_TO_M, 0]}
@@ -513,7 +520,7 @@ function WallWithOpenings({
           />
         </mesh>
       ))}
-      {segs.glass.map((g, i) => (
+      {!wall.hidden && segs.glass.map((g, i) => (
         <mesh
           key={`glass-${i}`}
           position={[g.offsetX * MM_TO_M, (g.y + g.height / 2) * MM_TO_M, 0]}
@@ -789,6 +796,53 @@ function LightingSwitcher() {
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * §M61 v0.9: 3D ビュー右上の「人を置く」ボタン。
+ * クリックで建物中心 (groundScene.center) に新規人物モデルを追加して即選択する。
+ * 配置後はメッシュをドラッグして XZ 平面上を自由に移動できる。
+ */
+function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
+  const addHuman = useFloorplanStore((s) => s.addHuman)
+  const select = useEditorStore((s) => s.select)
+  return (
+    <div
+      data-testid="human-toolbar"
+      style={{
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        zIndex: 10,
+        background: 'rgba(15, 23, 42, 0.72)',
+        padding: 8,
+        borderRadius: 6,
+        color: 'white',
+        fontSize: 12,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          const id = addHuman({ position: [Math.round(centerMm[0]), Math.round(centerMm[1])] })
+          if (id != null) select({ kind: 'human', id })
+        }}
+        aria-label="人物モデルを配置"
+        data-testid="human-add"
+        style={{
+          border: 'none',
+          background: '#3b82f6',
+          color: 'white',
+          padding: '6px 12px',
+          borderRadius: 4,
+          cursor: 'pointer',
+          fontSize: 12,
+        }}
+      >
+        人を置く
+      </button>
     </div>
   )
 }
