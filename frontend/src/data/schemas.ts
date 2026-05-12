@@ -114,7 +114,14 @@ const FurnitureInstanceSchema = z.object({
   catalogId: z.string(),
   position: PointSchema,
   rotation: z.number(),
-  scale: z.number().positive().optional(),
+  // §M69 v0.12: scale は uniform (number) または 3 軸 (tuple) のいずれか。
+  // 旧バージョンの保存データ (number) は読込時にそのまま保持し、ランタイムで normalize する。
+  scale: z
+    .union([
+      z.number().positive(),
+      z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
+    ])
+    .optional(),
 })
 
 const HumanModelSchema = z.object({

@@ -11,6 +11,7 @@ import { useRef } from 'react'
 import { Group, Line, Rect, Text } from 'react-konva'
 import type Konva from 'konva'
 import type { FurnitureInstance } from '@/types'
+import { furnitureScale3 } from '@/types'
 import { useEditorStore } from '@/store/editorStore'
 import { useFloorplanStore } from '@/store/floorplanStore'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
@@ -38,13 +39,20 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
   // 家具の代表サイズ = pieces の AABB を XZ 平面に投影
   const bbox = pieceAabbXZ(entry.pieces)
   if (bbox == null) return null
-  // §M52 v0.6: scale を bbox に乗算 (Group には Konva の scale を渡せば子全体が拡縮されるが、
-  // 名称テキストまで太くなるので bbox 表示のみ拡縮する素朴な実装にする)
-  const sc = furniture.scale ?? 1
-  const w = (bbox.maxX - bbox.minX) * sc
-  const h = (bbox.maxZ - bbox.minZ) * sc
-  const minX = bbox.minX * sc
-  const minZ = bbox.minZ * sc
+  // §M52 v0.6 / §M69 v0.12: 平面図は XZ 軸のみ反映 (Y は高さなので 2D には出さない)。
+  // 拡大率は tuple (or number) のどちらでも受けるので、furnitureScale3 で正規化する。
+  const sc3 = furnitureScale3(furniture.scale)
+  const scX = sc3[0]
+  const scZ = sc3[2]
+  const w = (bbox.maxX - bbox.minX) * scX
+  const h = (bbox.maxZ - bbox.minZ) * scZ
+  const minX = bbox.minX * scX
+  const minZ = bbox.minZ * scZ
+  // ラベル表示用 (3 軸個別を 1 行で読める形式に。等倍なら省略)
+  const scLabel =
+    Math.abs(sc3[0] - 1) < 0.01 && Math.abs(sc3[1] - 1) < 0.01 && Math.abs(sc3[2] - 1) < 0.01
+      ? ''
+      : ` (×${sc3[0].toFixed(2)}/${sc3[1].toFixed(2)}/${sc3[2].toFixed(2)})`
   // 家具中心 (position) を Group の x/y にして、子の位置はローカル mm でレイアウト
   const cx = furniture.position[0]
   const cy = furniture.position[1]
@@ -89,7 +97,7 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
         dash={[6, 4]}
       />
       <Text
-        text={entry.displayName + (sc !== 1 ? ` (×${sc.toFixed(2)})` : '')}
+        text={entry.displayName + scLabel}
         fontSize={10}
         fill="#525252"
         x={minX * scale + 4}

@@ -171,7 +171,54 @@ export function pickFloorTextureKind(presetId: string): FloorTextureKind {
   if (presetId === 'bathroom' || presetId === 'toilet') return 'tile'
   if (presetId === 'kitchen' || presetId === 'kitchen-gas' || presetId === 'washroom') return 'kitchen'
   if (presetId === 'entrance') return 'concrete'
+  // §M71 v0.12: 庭は屋外なので芝生テクスチャ。バルコニーは木調 (将来 deck テクスチャに差し替え予定)
+  if (presetId === 'garden') return 'grass'
   return 'wood'
 }
 
-export type FloorTextureKind = 'wood' | 'kitchen' | 'tile' | 'concrete'
+export type FloorTextureKind = 'wood' | 'kitchen' | 'tile' | 'concrete' | 'grass'
+
+/**
+ * §M71 v0.12: 芝生床テクスチャ。
+ * - ベースは深緑 (#3e7a3a)
+ * - 短い線分を擬似的にランダム配置して芝のブレード感
+ * - 角度バリエーションを混ぜて単色べた塗りに見えないようにする
+ */
+export function makeGrassTexture(): ColorTexture {
+  return makeCanvasTexture((ctx, size) => {
+    // ベース緑 + 縦のグラデで奥行き感
+    const grad = ctx.createLinearGradient(0, 0, 0, size)
+    grad.addColorStop(0, '#3f7a3a')
+    grad.addColorStop(1, '#356a31')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, size, size)
+
+    // 細かい色斑点 (土が透ける感じ)
+    ctx.fillStyle = 'rgba(80, 50, 30, 0.18)'
+    for (let i = 0; i < 60; i++) {
+      const x = (i * 41) % size
+      const y = (i * 73) % size
+      ctx.beginPath()
+      ctx.arc(x, y, 1.2, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    // 芝のブレード: 短い線分を多めに描く
+    const bladeCount = 700
+    for (let i = 0; i < bladeCount; i++) {
+      const x = (i * 53 + ((i * 17) % 13)) % size
+      const y = (i * 97 + ((i * 11) % 7)) % size
+      // 明るめ/暗めの緑を交互
+      const bright = (i % 5 === 0)
+      ctx.strokeStyle = bright ? 'rgba(140, 200, 100, 0.55)' : 'rgba(60, 100, 50, 0.5)'
+      ctx.lineWidth = bright ? 1 : 1
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      const angle = ((i * 31) % 60) - 30 // -30〜+30°
+      const len = 3 + ((i * 7) % 4) // 3〜6px
+      const rad = (angle * Math.PI) / 180
+      ctx.lineTo(x + Math.sin(rad) * len, y - Math.cos(rad) * len)
+      ctx.stroke()
+    }
+  })
+}

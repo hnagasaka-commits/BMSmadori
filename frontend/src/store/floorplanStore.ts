@@ -285,8 +285,14 @@ export type FloorplanState = {
   removeFurniture: (furnitureId: string) => void
   moveFurniture: (furnitureId: string, position: readonly [number, number]) => void
   rotateFurniture: (furnitureId: string, rotation: number) => void
-  /** §M52 v0.6: 家具の拡大率 (uniform) を更新 (0.4 〜 2.5 でクランプ) */
-  scaleFurniture: (furnitureId: string, scale: number) => void
+  /**
+   * §M52 v0.6: 家具の拡大率を更新 (各軸 0.2 〜 3.0 でクランプ)。
+   * §M69 v0.12: 引数を `number` (uniform) または `[x, y, z]` (3 軸個別) で受ける。
+   */
+  scaleFurniture: (
+    furnitureId: string,
+    scale: number | readonly [number, number, number],
+  ) => void
   /** Sidebar の "部屋に既定家具を入れる" アクション (preset → catalogId 列を Floor.furniture に追加) */
   autoFurnishAllRooms: () => number
 
@@ -1267,9 +1273,29 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const idx = floor.furniture.findIndex((f) => f.id === furnitureId)
     if (idx < 0) return
     const f = floor.furniture[idx]!
-    const clamped = Math.max(0.4, Math.min(2.5, scale))
-    if (Math.abs((f.scale ?? 1) - clamped) < 0.005) return
-    const next: FurnitureInstance = { ...f, scale: clamped }
+    // §M69 v0.12: 各軸 0.2〜3.0 にクランプ。number/tuple のいずれも受ける
+    const clampAxis = (v: number) => Math.max(0.2, Math.min(3.0, v))
+    let nextScale: number | readonly [number, number, number]
+    if (typeof scale === 'number') {
+      nextScale = clampAxis(scale)
+    } else {
+      nextScale = [clampAxis(scale[0]), clampAxis(scale[1]), clampAxis(scale[2])] as const
+    }
+    // 変化なしなら set しない (履歴肥大化防止)
+    const prev = f.scale
+    const sameAsPrev = (() => {
+      if (typeof nextScale === 'number') {
+        return typeof prev === 'number' && Math.abs(prev - nextScale) < 0.005
+      }
+      const prevArr = prev == null ? [1, 1, 1] : typeof prev === 'number' ? [prev, prev, prev] : prev
+      return (
+        Math.abs(prevArr[0]! - nextScale[0]) < 0.005 &&
+        Math.abs(prevArr[1]! - nextScale[1]) < 0.005 &&
+        Math.abs(prevArr[2]! - nextScale[2]) < 0.005
+      )
+    })()
+    if (sameAsPrev) return
+    const next: FurnitureInstance = { ...f, scale: nextScale }
     snapshotForHistory(state.floorplan)
     const nextFurniture = floor.furniture.map((x, i) => (i === idx ? next : x))
     set({

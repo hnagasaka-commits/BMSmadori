@@ -297,6 +297,7 @@ function FloorPlates({ scene, textures }: { scene: SceneSpec; textures: TextureB
     <>
       {scene.floorPlates.map((plate) => {
         const kind = pickFloorTextureKind(plate.presetId)
+        // §M71 v0.12: grass を選択肢に追加
         const sourceTex =
           kind === 'wood'
             ? textures.woodFloor
@@ -304,7 +305,9 @@ function FloorPlates({ scene, textures }: { scene: SceneSpec; textures: TextureB
               ? textures.kitchenFloor
               : kind === 'tile'
                 ? textures.tileFloor
-                : textures.concreteFloor
+                : kind === 'grass'
+                  ? textures.grassFloor
+                  : textures.concreteFloor
         if (plate.shapeKind === 'rect') {
           const center: [number, number, number] = [
             plate.center[0] * MM_TO_M,
@@ -532,6 +535,93 @@ function WallsWithOpenings({
   )
 }
 
+/**
+ * §M70 v0.12: バルコニー外周の手摺。
+ *
+ * 壁ローカル座標 (X = 壁長方向、Y = 上、Z = 厚み方向) に対し:
+ *  - 縦柱を 800mm 間隔で立てる (40×40mm、高さ 1000mm)
+ *  - 上下に横棒 2 本: 上 ~1000mm、下 ~80mm
+ *  - 中段に 細い縦バー (柵風) を 100mm 間隔で並べる
+ * 色は外装系ダーク (金属感のあるグレー)。
+ */
+function Railing({ length, thickness }: { length: number; thickness: number }) {
+  const RAIL_HEIGHT = 1000 // mm
+  const POST_SIZE = 50 // mm
+  const POST_SPACING = 800 // mm
+  const TOP_RAIL_H = 60
+  const BOTTOM_RAIL_H = 40
+  const BAR_SIZE = 15
+  const BAR_SPACING = 110
+  const halfLen = length / 2
+  const depth = Math.max(20, thickness * 0.3)
+  const material = { color: '#5b6b75', roughness: 0.45, metalness: 0.4 }
+
+  // 柱: 両端 + 等間隔
+  const postPositions: number[] = []
+  const postCount = Math.max(2, Math.ceil(length / POST_SPACING))
+  for (let i = 0; i < postCount; i++) {
+    postPositions.push(-halfLen + (i * length) / (postCount - 1))
+  }
+  // 縦バー (柵風)
+  const barPositions: number[] = []
+  if (length > BAR_SPACING * 2) {
+    const innerStart = -halfLen + 80
+    const innerEnd = halfLen - 80
+    for (let x = innerStart; x <= innerEnd; x += BAR_SPACING) {
+      barPositions.push(x)
+    }
+  }
+
+  return (
+    <group>
+      {/* 柱 */}
+      {postPositions.map((px, i) => (
+        <mesh
+          key={`post-${i}`}
+          position={[px * MM_TO_M, (RAIL_HEIGHT / 2) * MM_TO_M, 0]}
+          castShadow
+        >
+          <boxGeometry args={[POST_SIZE * MM_TO_M, RAIL_HEIGHT * MM_TO_M, POST_SIZE * MM_TO_M]} />
+          <meshStandardMaterial {...material} />
+        </mesh>
+      ))}
+      {/* 上の横棒 */}
+      <mesh
+        position={[0, (RAIL_HEIGHT + TOP_RAIL_H / 2) * MM_TO_M, 0]}
+        castShadow
+      >
+        <boxGeometry args={[length * MM_TO_M, TOP_RAIL_H * MM_TO_M, depth * MM_TO_M]} />
+        <meshStandardMaterial color="#3d4a52" roughness={0.5} metalness={0.4} />
+      </mesh>
+      {/* 下の横棒 */}
+      <mesh
+        position={[0, (BOTTOM_RAIL_H / 2) * MM_TO_M, 0]}
+        castShadow
+      >
+        <boxGeometry args={[length * MM_TO_M, BOTTOM_RAIL_H * MM_TO_M, depth * MM_TO_M]} />
+        <meshStandardMaterial color="#3d4a52" roughness={0.5} metalness={0.4} />
+      </mesh>
+      {/* 中段の細い縦バー */}
+      {barPositions.map((bx, i) => (
+        <mesh
+          key={`bar-${i}`}
+          position={[bx * MM_TO_M, (RAIL_HEIGHT / 2) * MM_TO_M, 0]}
+          castShadow
+        >
+          <boxGeometry
+            args={[
+              BAR_SIZE * MM_TO_M,
+              (RAIL_HEIGHT - 80) * MM_TO_M,
+              BAR_SIZE * MM_TO_M,
+            ]}
+          />
+          <meshStandardMaterial {...material} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 function WallWithOpenings({
   wall,
   openings,
@@ -564,6 +654,20 @@ function WallWithOpenings({
   // §M60 v0.9: 非表示壁 (hiddenWallIds) は壁本体 (solids) と窓ガラスを描かないが、
   // ドアパネルだけは独立して残す。ドアは家具同様ユーザーが置いた要素なので、
   // 壁を消した瞬間に 3D から消えるのは不便というフィードバックに対応
+
+  // §M70 v0.12: バルコニーの外周は手摺 (柱 + 横棒) として描画する。
+  // 通常の solids/glass/lintel/sill は出さず、Railing コンポーネントに任せる。
+  if (wall.kind === 'railing' && !wall.hidden) {
+    return (
+      <group
+        position={[wall.center[0] * MM_TO_M, 0, wall.center[2] * MM_TO_M]}
+        rotation={[0, wall.rotationY, 0]}
+      >
+        <Railing length={wall.size[0]} thickness={wall.size[2]} />
+      </group>
+    )
+  }
+
   return (
     <group
       position={[wall.center[0] * MM_TO_M, 0, wall.center[2] * MM_TO_M]}

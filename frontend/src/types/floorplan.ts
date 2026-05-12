@@ -142,7 +142,26 @@ export type FurnitureInstance = {
   catalogId: string
   position: readonly [number, number]
   rotation: number
-  scale?: number
+  /**
+   * §M52 v0.6: 旧仕様は number (uniform 拡大率) のみ。
+   * §M69 v0.12: 縦横奥行きを個別に編集できるよう tuple を許容。
+   * 後方互換: 既存データ (number) は X/Y/Z 全てに同じ値を適用する。
+   */
+  scale?: number | readonly [number, number, number]
+}
+
+/**
+ * §M69 v0.12: FurnitureInstance.scale を必ず [x, y, z] の 3 軸タプルに正規化するヘルパー。
+ * - undefined → [1, 1, 1]
+ * - number → [n, n, n]
+ * - tuple → そのまま
+ */
+export function furnitureScale3(
+  scale: FurnitureInstance['scale'],
+): readonly [number, number, number] {
+  if (scale == null) return [1, 1, 1]
+  if (typeof scale === 'number') return [scale, scale, scale]
+  return scale
 }
 
 /** §5.2.1 人物モデル (Phase 2) */

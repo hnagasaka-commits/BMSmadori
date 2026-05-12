@@ -10,6 +10,7 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import {
   makeConcreteTexture,
+  makeGrassTexture,
   makeKitchenFloorTexture,
   makeSidingTexture,
   makeTileFloorTexture,
@@ -22,6 +23,8 @@ export type TextureBundle = {
   kitchenFloor: THREE.CanvasTexture
   tileFloor: THREE.CanvasTexture
   concreteFloor: THREE.CanvasTexture
+  /** §M71 v0.12: 庭プリセット用の芝生テクスチャ */
+  grassFloor: THREE.CanvasTexture
   wallpaper: THREE.CanvasTexture
   siding: THREE.CanvasTexture
 }
@@ -35,6 +38,7 @@ function getOrBuildBundle(): TextureBundle {
     kitchenFloor: makeKitchenFloorTexture(),
     tileFloor: makeTileFloorTexture(),
     concreteFloor: makeConcreteTexture(),
+    grassFloor: makeGrassTexture(),
     wallpaper: makeWallpaperTexture(),
     siding: makeSidingTexture(),
   }

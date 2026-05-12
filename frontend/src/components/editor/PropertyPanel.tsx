@@ -14,6 +14,7 @@ import { ROOM_PRESETS, getPreset } from '@/data/roomPresets'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
 import { listSashCatalog } from '@/data/sashCatalog'
 import type { WallType, WindowType } from '@/types'
+import { furnitureScale3 } from '@/types'
 
 const WALL_TYPES: ReadonlyArray<{ id: WallType; label: string }> = [
   { id: 'exterior', label: '外壁' },
@@ -686,7 +687,13 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
 
   if (fi == null) return null
   const entry = getCatalogEntry(fi.catalogId)
-  const currentScale = fi.scale ?? 1
+  // §M69 v0.12: scale を 3 軸 [x, y, z] に正規化。slider は 0.2〜3.0 の範囲。
+  const scale3 = furnitureScale3(fi.scale)
+  const setAxis = (axis: 0 | 1 | 2, v: number) => {
+    const next: [number, number, number] = [...scale3] as [number, number, number]
+    next[axis] = v
+    scaleFurniture(fi.id, next)
+  }
 
   return (
     <section className="editor-properties" data-testid="property-panel">
@@ -728,36 +735,49 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
         </div>
       </div>
 
+      {/* §M69 v0.12: 横幅 / 高さ / 奥行きを個別に拡大率で調整。
+          範囲は 0.2〜3.0× (床下の小物〜大判の家具までカバー)。
+          UI は 3 軸の slider + number セットを並べる */}
       <div className="property-section">
         <h3>サイズ (拡大率)</h3>
-        {/* §M52 v0.6: 家具を 0.4 〜 2.5 の uniform スケールで拡大縮小 */}
-        <div className="property-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
-          <input
-            type="range"
-            min={0.4}
-            max={2.5}
-            step={0.05}
-            value={currentScale}
-            onChange={(e) => scaleFurniture(fi.id, Number(e.target.value))}
-            data-testid="furniture-scale-slider"
-            aria-label="家具のサイズ (拡大率)"
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--gray-500)' }}>
-            <span>0.4×</span>
+        {([
+          { axis: 0 as const, label: '横幅 (X)', testid: 'furniture-scale-x' },
+          { axis: 1 as const, label: '高さ (Y)', testid: 'furniture-scale-y' },
+          { axis: 2 as const, label: '奥行 (Z)', testid: 'furniture-scale-z' },
+        ]).map(({ axis, label, testid }) => (
+          <div
+            key={axis}
+            className="property-row"
+            style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4, marginBottom: 8 }}
+          >
+            <span className="label" style={{ fontSize: 11 }}>{label}</span>
             <input
-              type="number"
-              value={currentScale}
+              type="range"
+              min={0.2}
+              max={3.0}
               step={0.05}
-              min={0.4}
-              max={2.5}
-              onChange={(e) => scaleFurniture(fi.id, Number(e.target.value))}
-              data-testid="furniture-scale-number"
-              aria-label="家具のサイズ (拡大率) 数値入力"
-              style={{ width: 80, textAlign: 'right' }}
+              value={scale3[axis]}
+              onChange={(e) => setAxis(axis, Number(e.target.value))}
+              data-testid={`${testid}-slider`}
+              aria-label={`${label} の拡大率`}
             />
-            <span>2.5×</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--gray-500)' }}>
+              <span>0.2×</span>
+              <input
+                type="number"
+                value={scale3[axis]}
+                step={0.05}
+                min={0.2}
+                max={3.0}
+                onChange={(e) => setAxis(axis, Number(e.target.value))}
+                data-testid={`${testid}-number`}
+                aria-label={`${label} の拡大率 数値入力`}
+                style={{ width: 80, textAlign: 'right' }}
+              />
+              <span>3.0×</span>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
 
       <div className="property-section">

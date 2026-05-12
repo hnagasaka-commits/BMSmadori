@@ -20,8 +20,12 @@ export type WallBox = {
   center: Vec3
   size: Vec3
   rotationY: number
-  /** wallType 由来。マテリアル切替に使う */
-  kind: 'exterior' | 'shared' | 'interior'
+  /**
+   * wallType 由来。マテリアル切替に使う。
+   * §M70 v0.12: 'railing' を追加 — バルコニーの外周壁 (= sharedBy が balcony 1 つだけの壁) は
+   * 通常の壁ではなく手摺として描画する。
+   */
+  kind: 'exterior' | 'shared' | 'interior' | 'railing'
   /**
    * §M60 v0.9: 非表示フラグ。hiddenWallIds に含まれる壁は wall 本体は描かないが、
    * 載っているドア/窓のヒント (= 開口部マッチ) は引き続き使うため WallBox 自体は残す。
@@ -130,13 +134,19 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
     }
   }
 
+  // §M70 v0.12: バルコニー外周判定用に roomId → presetId の lookup を作る
+  const roomPresetById = new Map<string, string>()
+  if (Array.isArray(floor.rooms)) {
+    for (const room of floor.rooms) roomPresetById.set(room.id, room.presetId)
+  }
+
   const walls: WallBox[] = []
   // §M30 / §M60 v0.9: hiddenWallIds は壁本体を非表示にするが、
   // 載っているドア/窓は引き続き 3D に出したいので、WallBox は hidden=true で残す
   const hidden = new Set(floor.hiddenWallIds ?? [])
   if (Array.isArray(floor.walls)) {
     for (const wall of floor.walls) {
-      const wb = wallToBox(wall, ceilingHeight)
+      const wb = wallToBox(wall, ceilingHeight, roomPresetById)
       if (wb == null) continue
       if (hidden.has(wall.id)) wb.hidden = true
       walls.push(wb)
@@ -145,7 +155,7 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
   // §M30: freestandingWalls も 3D に出す
   if (Array.isArray(floor.freestandingWalls)) {
     for (const wall of floor.freestandingWalls) {
-      const wb = wallToBox(wall, ceilingHeight)
+      const wb = wallToBox(wall, ceilingHeight, roomPresetById)
       if (wb != null) walls.push(wb)
     }
   }
@@ -170,7 +180,11 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
   }
 }
 
-function wallToBox(wall: Wall, ceilingHeight: number): WallBox | null {
+function wallToBox(
+  wall: Wall,
+  ceilingHeight: number,
+  roomPresetById: ReadonlyMap<string, string>,
+): WallBox | null {
   const [x1, y1] = wall.from
   const [x2, y2] = wall.to
   const dx = x2 - x1
@@ -184,8 +198,18 @@ function wallToBox(wall: Wall, ceilingHeight: number): WallBox | null {
   const sizeY = wall.height ?? ceilingHeight
   const rotationY = -Math.atan2(dy, dx)
 
-  const kind: WallBox['kind'] =
-    wall.wallType === 'exterior' ? 'exterior' : wall.wallType === 'shared' ? 'shared' : 'interior'
+  // §M70 v0.12: balcony の外周壁 (= sharedBy が balcony 1 件だけ) は railing とする。
+  // sharedBy.length === 1 で唯一の部屋が balcony プリセットの時に限定 (家側に接する壁は通常壁)
+  const isBalconyRailing =
+    wall.sharedBy.length === 1 && roomPresetById.get(wall.sharedBy[0]!) === 'balcony'
+
+  const kind: WallBox['kind'] = isBalconyRailing
+    ? 'railing'
+    : wall.wallType === 'exterior'
+      ? 'exterior'
+      : wall.wallType === 'shared'
+        ? 'shared'
+        : 'interior'
 
   return {
     id: wall.id,

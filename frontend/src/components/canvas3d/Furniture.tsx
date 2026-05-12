@@ -14,6 +14,7 @@ import { useThree } from '@react-three/fiber'
 import type { ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Floor } from '@/types'
+import { furnitureScale3 } from '@/types'
 import { useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
@@ -32,6 +33,7 @@ export function Furniture({ furniture }: { furniture: Floor['furniture'] }) {
         const entry = getCatalogEntry(fi.catalogId)
         if (entry == null) return null
         const isSelected = fi.id === selectedId
+        const scale3 = furnitureScale3(fi.scale)
         return (
           <FurnitureInstanceMesh
             key={fi.id}
@@ -39,7 +41,7 @@ export function Furniture({ furniture }: { furniture: Floor['furniture'] }) {
             pieces={entry.pieces}
             positionMm={fi.position}
             rotation={fi.rotation}
-            instanceScale={fi.scale ?? 1}
+            instanceScale3={scale3}
             isSelected={isSelected}
           />
         )
@@ -53,15 +55,15 @@ function FurnitureInstanceMesh({
   pieces,
   positionMm,
   rotation,
-  instanceScale,
+  instanceScale3,
   isSelected,
 }: {
   id: string
   pieces: ReadonlyArray<FurniturePiece>
   positionMm: readonly [number, number]
   rotation: number
-  /** §M52: 家具のインスタンス拡大率 (1 = 等倍) */
-  instanceScale: number
+  /** §M69 v0.12: 家具のインスタンス拡大率 [X, Y, Z] (1 = 等倍) */
+  instanceScale3: readonly [number, number, number]
   isSelected: boolean
 }) {
   const select = useEditorStore((s) => s.select)
@@ -157,8 +159,8 @@ function FurnitureInstanceMesh({
       ref={groupRef}
       position={[positionMm[0] * MM_TO_M, 0, positionMm[1] * MM_TO_M]}
       rotation={[0, rotation, 0]}
-      // §M52: スケールはグループ単位で適用 (子の piece position/size に均一にかかる)
-      scale={[instanceScale, instanceScale, instanceScale]}
+      // §M52 / §M69: スケールはグループ単位で各軸に適用 (子の piece position/size に乗る)
+      scale={[instanceScale3[0], instanceScale3[1], instanceScale3[2]]}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
