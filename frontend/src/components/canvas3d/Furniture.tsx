@@ -39,6 +39,7 @@ export function Furniture({ furniture }: { furniture: Floor['furniture'] }) {
             pieces={entry.pieces}
             positionMm={fi.position}
             rotation={fi.rotation}
+            instanceScale={fi.scale ?? 1}
             isSelected={isSelected}
           />
         )
@@ -52,12 +53,15 @@ function FurnitureInstanceMesh({
   pieces,
   positionMm,
   rotation,
+  instanceScale,
   isSelected,
 }: {
   id: string
   pieces: ReadonlyArray<FurniturePiece>
   positionMm: readonly [number, number]
   rotation: number
+  /** §M52: 家具のインスタンス拡大率 (1 = 等倍) */
+  instanceScale: number
   isSelected: boolean
 }) {
   const select = useEditorStore((s) => s.select)
@@ -153,6 +157,8 @@ function FurnitureInstanceMesh({
       ref={groupRef}
       position={[positionMm[0] * MM_TO_M, 0, positionMm[1] * MM_TO_M]}
       rotation={[0, rotation, 0]}
+      // §M52: スケールはグループ単位で適用 (子の piece position/size に均一にかかる)
+      scale={[instanceScale, instanceScale, instanceScale]}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

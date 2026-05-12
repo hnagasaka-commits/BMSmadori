@@ -35,8 +35,13 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
   // 家具の代表サイズ = pieces の AABB を XZ 平面に投影
   const bbox = pieceAabbXZ(entry.pieces)
   if (bbox == null) return null
-  const w = bbox.maxX - bbox.minX
-  const h = bbox.maxZ - bbox.minZ
+  // §M52 v0.6: scale を bbox に乗算 (Group には Konva の scale を渡せば子全体が拡縮されるが、
+  // 名称テキストまで太くなるので bbox 表示のみ拡縮する素朴な実装にする)
+  const sc = furniture.scale ?? 1
+  const w = (bbox.maxX - bbox.minX) * sc
+  const h = (bbox.maxZ - bbox.minZ) * sc
+  const minX = bbox.minX * sc
+  const minZ = bbox.minZ * sc
   // 家具中心 (position) を Group の x/y にして、子の位置はローカル mm でレイアウト
   const cx = furniture.position[0]
   const cy = furniture.position[1]
@@ -66,10 +71,10 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
         void gridSize
       }}
     >
-      {/* 外枠 + 名称 */}
+      {/* 外枠 + 名称 (scale 反映) */}
       <Rect
-        x={bbox.minX * scale}
-        y={bbox.minZ * scale}
+        x={minX * scale}
+        y={minZ * scale}
         width={w * scale}
         height={h * scale}
         fill={isSelected ? 'rgba(59,130,246,0.10)' : 'rgba(0,0,0,0.05)'}
@@ -78,11 +83,11 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
         dash={[6, 4]}
       />
       <Text
-        text={entry.displayName}
+        text={entry.displayName + (sc !== 1 ? ` (×${sc.toFixed(2)})` : '')}
         fontSize={10}
         fill="#525252"
-        x={bbox.minX * scale + 4}
-        y={bbox.minZ * scale + 4}
+        x={minX * scale + 4}
+        y={minZ * scale + 4}
         listening={false}
       />
       {/* 中央の十字 (家具中心) */}

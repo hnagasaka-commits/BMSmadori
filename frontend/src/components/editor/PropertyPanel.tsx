@@ -670,14 +670,16 @@ function ColumnProperties({ columnId }: { columnId: string }) {
 
 function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
   const fi = useFloorplanStore((s) =>
-    s.floorplan.floors[0]?.furniture.find((f) => f.id === furnitureId),
+    s.floorplan.floors[s.activeFloorIndex]?.furniture.find((f) => f.id === furnitureId),
   )
   const removeFurniture = useFloorplanStore((s) => s.removeFurniture)
   const rotateFurniture = useFloorplanStore((s) => s.rotateFurniture)
+  const scaleFurniture = useFloorplanStore((s) => s.scaleFurniture)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
   if (fi == null) return null
   const entry = getCatalogEntry(fi.catalogId)
+  const currentScale = fi.scale ?? 1
 
   return (
     <section className="editor-properties" data-testid="property-panel">
@@ -716,6 +718,38 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
               </button>
             )
           })}
+        </div>
+      </div>
+
+      <div className="property-section">
+        <h3>サイズ (拡大率)</h3>
+        {/* §M52 v0.6: 家具を 0.4 〜 2.5 の uniform スケールで拡大縮小 */}
+        <div className="property-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+          <input
+            type="range"
+            min={0.4}
+            max={2.5}
+            step={0.05}
+            value={currentScale}
+            onChange={(e) => scaleFurniture(fi.id, Number(e.target.value))}
+            data-testid="furniture-scale-slider"
+            aria-label="家具のサイズ (拡大率)"
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--gray-500)' }}>
+            <span>0.4×</span>
+            <input
+              type="number"
+              value={currentScale}
+              step={0.05}
+              min={0.4}
+              max={2.5}
+              onChange={(e) => scaleFurniture(fi.id, Number(e.target.value))}
+              data-testid="furniture-scale-number"
+              aria-label="家具のサイズ (拡大率) 数値入力"
+              style={{ width: 80, textAlign: 'right' }}
+            />
+            <span>2.5×</span>
+          </div>
         </div>
       </div>
 

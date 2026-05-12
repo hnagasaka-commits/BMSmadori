@@ -285,6 +285,8 @@ export type FloorplanState = {
   removeFurniture: (furnitureId: string) => void
   moveFurniture: (furnitureId: string, position: readonly [number, number]) => void
   rotateFurniture: (furnitureId: string, rotation: number) => void
+  /** §M52 v0.6: 家具の拡大率 (uniform) を更新 (0.4 〜 2.5 でクランプ) */
+  scaleFurniture: (furnitureId: string, scale: number) => void
   /** Sidebar の "部屋に既定家具を入れる" アクション (preset → catalogId 列を Floor.furniture に追加) */
   autoFurnishAllRooms: () => number
 
@@ -1231,6 +1233,24 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     if (idx < 0) return
     const f = floor.furniture[idx]!
     const next: FurnitureInstance = { ...f, rotation }
+    snapshotForHistory(state.floorplan)
+    const nextFurniture = floor.furniture.map((x, i) => (i === idx ? next : x))
+    set({
+      floorplan: replaceFloor(state.floorplan, { ...floor, furniture: nextFurniture }, floorIdx),
+    })
+  },
+
+  scaleFurniture: (furnitureId, scale) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    const idx = floor.furniture.findIndex((f) => f.id === furnitureId)
+    if (idx < 0) return
+    const f = floor.furniture[idx]!
+    const clamped = Math.max(0.4, Math.min(2.5, scale))
+    if (Math.abs((f.scale ?? 1) - clamped) < 0.005) return
+    const next: FurnitureInstance = { ...f, scale: clamped }
     snapshotForHistory(state.floorplan)
     const nextFurniture = floor.furniture.map((x, i) => (i === idx ? next : x))
     set({

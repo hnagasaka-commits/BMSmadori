@@ -528,6 +528,30 @@ function WallWithOpenings({
           <meshStandardMaterial {...WINDOW_GLASS_MATERIAL} />
         </mesh>
       ))}
+      {/* §M50 v0.6: ドアパネル (薄板)。swingInward に従って壁厚の 1/3 だけ片側へオフセット */}
+      {segs.doorPanels.map((d, i) => {
+        const offsetZ = (d.swingInward ? -1 : 1) * (wall.size[2] / 3)
+        return (
+          <mesh
+            key={`door-panel-${i}`}
+            position={[
+              d.offsetX * MM_TO_M,
+              (d.y + d.height / 2) * MM_TO_M,
+              offsetZ * MM_TO_M,
+            ]}
+            castShadow
+          >
+            <boxGeometry
+              args={[d.width * MM_TO_M, d.height * MM_TO_M, 30 * MM_TO_M]}
+            />
+            <meshStandardMaterial
+              color="#6e4f33"
+              roughness={0.55}
+              metalness={0.05}
+            />
+          </mesh>
+        )
+      })}
     </group>
   )
 }
@@ -545,6 +569,14 @@ function splitWallByOpenings(
 ): {
   solids: { offsetX: number; y: number; width: number; height: number }[]
   glass: { offsetX: number; y: number; width: number; height: number }[]
+  /** §M50 v0.6: ドアパネル (薄板)。kind='door' の開口に必ず 1 枚 */
+  doorPanels: {
+    offsetX: number
+    y: number
+    width: number
+    height: number
+    swingInward: boolean
+  }[]
 } {
   const total = wall.size[0]
   const top = wall.size[1]
@@ -552,6 +584,7 @@ function splitWallByOpenings(
     return {
       solids: [{ offsetX: 0, y: 0, width: total, height: top }],
       glass: [],
+      doorPanels: [],
     }
   }
 
@@ -559,6 +592,13 @@ function splitWallByOpenings(
   const sorted = [...openings].sort((a, b) => a.positionRatio - b.positionRatio)
   const solids: { offsetX: number; y: number; width: number; height: number }[] = []
   const glass: { offsetX: number; y: number; width: number; height: number }[] = []
+  const doorPanels: {
+    offsetX: number
+    y: number
+    width: number
+    height: number
+    swingInward: boolean
+  }[] = []
 
   let cursor = -total / 2
   for (const op of sorted) {
@@ -592,13 +632,23 @@ function splitWallByOpenings(
           height: headHeight,
         })
       }
-      // 窓ガラスは透明箱を 1 枚立てる。扉は何も置かない (空気)
+      // 窓ガラスは透明箱を 1 枚立てる。
       if (op.kind === 'window') {
         glass.push({
           offsetX: opLeft + opWidth / 2,
           y: op.sillHeight,
           width: opWidth,
           height: op.height,
+        })
+      }
+      // §M50 v0.6: ドアパネルを薄板として配置 (常時 1 枚、視認用)
+      if (op.kind === 'door') {
+        doorPanels.push({
+          offsetX: opLeft + opWidth / 2,
+          y: op.sillHeight,
+          width: opWidth,
+          height: op.height,
+          swingInward: op.swingInward !== false,
         })
       }
       cursor = opRight
@@ -612,7 +662,7 @@ function splitWallByOpenings(
     const w = total / 2 - cursor
     solids.push({ offsetX: cursor + w / 2, y: 0, width: w, height: top })
   }
-  return { solids, glass }
+  return { solids, glass, doorPanels }
 }
 
 /**

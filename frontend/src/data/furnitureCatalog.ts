@@ -567,6 +567,79 @@ const ENTRIES: FurnitureCatalogEntry[] = [
       },
     ],
   },
+  // ---------------------------------------------------------------------------
+  // §M51 v0.6: ユーティリティ系の追加 (トイレ詳細 + ゴミ箱)
+  // ---------------------------------------------------------------------------
+  {
+    id: 'toilet-detail',
+    displayName: '洋式トイレ (詳細)',
+    minRoom: { w: 450, h: 700 },
+    pieces: [
+      {
+        id: 'bowl',
+        position: [0, 200, 100],
+        size: [380, 400, 550],
+        shape: 'box',
+        material: { color: '#fafafa', roughness: 0.18, metalness: 0.05 },
+      },
+      {
+        id: 'seat',
+        position: [0, 430, 80],
+        size: [400, 50, 500],
+        shape: 'box',
+        material: { color: '#f0f0f0', roughness: 0.35, metalness: 0.05 },
+      },
+      {
+        id: 'tank',
+        position: [0, 700, -150],
+        size: [400, 600, 250],
+        shape: 'box',
+        material: { color: '#fafafa', roughness: 0.18, metalness: 0.05 },
+      },
+      {
+        id: 'lid',
+        position: [0, 470, 80],
+        size: [420, 30, 520],
+        shape: 'box',
+        material: { color: '#e8e8e8', roughness: 0.4, metalness: 0.05 },
+      },
+    ],
+  },
+  {
+    id: 'trash-can-small',
+    displayName: 'ゴミ箱 (小)',
+    minRoom: { w: 250, h: 250 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 220, 0],
+        size: [240, 440, 240],
+        shape: 'cylinder',
+        material: { color: '#9aa0a6', roughness: 0.5, metalness: 0.3 },
+      },
+    ],
+  },
+  {
+    id: 'trash-can-large',
+    displayName: 'ゴミ箱 (45L 大)',
+    minRoom: { w: 350, h: 350 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 320, 0],
+        size: [340, 640, 340],
+        shape: 'cylinder',
+        material: { color: '#3c3c3c', roughness: 0.6, metalness: 0.2 },
+      },
+      {
+        id: 'lid',
+        position: [0, 650, 0],
+        size: [340, 20, 340],
+        shape: 'cylinder',
+        material: { color: '#2c2c2c', roughness: 0.6, metalness: 0.2 },
+      },
+    ],
+  },
 ]
 
 const BY_ID = new Map(ENTRIES.map((e) => [e.id, e]))

@@ -61,6 +61,8 @@ export type Opening = {
   height: number
   /** 壁長 (mm) に対する中心の位置比率 (0..1)。Wall.from を 0 とする */
   positionRatio: number
+  /** §M50 v0.6: ドアパネルを壁の内側 / 外側どちらに描くか (door のみ) */
+  swingInward?: boolean
 }
 
 export type SceneSpec = {
@@ -196,6 +198,8 @@ function doorToOpening(d: Door): Opening {
     sillHeight: 0,
     height: DEFAULT_DOOR_HEIGHT_MM,
     positionRatio: d.positionRatio,
+    // §M50 v0.6: swingInward が未指定なら true (= 既定で内開き) を採用
+    swingInward: d.swingInward !== false,
   }
 }
 
