@@ -186,6 +186,8 @@ export function Canvas3D() {
       </Canvas>
       {/* §M78: FPV モード中の HUD (Canvas 外の HTML 層) */}
       <FpvHud />
+      {/* §M103 v0.23: 視線方向を示すクロスヘア (FPV 中のみ表示) */}
+      <FpvCrosshair />
     </div>
   )
 }
@@ -208,6 +210,7 @@ function CameraRig({
 }) {
   const fpvHumanId = useEditorStore((s) => s.fpvHumanId)
   const exitFpv = useEditorStore((s) => s.exitFpv)
+  const moveHuman = useFloorplanStore((s) => s.moveHuman)
   const { camera } = useThree()
 
   // 対象 HumanModel を探す (どのフロアに居るかも判定)。
@@ -223,9 +226,18 @@ function CameraRig({
     }
   }
 
-  // FPV に入る瞬間、カメラを人の目の高さ + 向きにセット
+  // FPV エントリ時のみカメラを初期化。以降は useFrame / キーボードで更新する。
+  // 旧コードは fpvTarget が変わる度に位置リセットしていたため、キー移動した直後に
+  // 元の位置に戻されてしまっていた。entry ref で初回のみに絞る。
+  const lastFpvIdRef = useRef<string | null>(null)
   useEffect(() => {
+    if (fpvHumanId == null) {
+      lastFpvIdRef.current = null
+      return
+    }
+    if (lastFpvIdRef.current === fpvHumanId) return
     if (fpvTarget == null) return
+    lastFpvIdRef.current = fpvHumanId
     const { human, yOffsetMm } = fpvTarget
     // 目線は身長 - 100mm (頭頂から ~10cm 下)
     const eyeY = (yOffsetMm + Math.max(800, human.height - 100)) * MM_TO_M
@@ -233,11 +245,67 @@ function CameraRig({
     const pz = human.position[1] * MM_TO_M
     camera.position.set(px, eyeY, pz)
     // human.rotation: Y 軸回転 (rad)。three.js デフォルト forward は -Z。
-    // 視点方向 = (0,0,-1) を Y で human.rotation 回転 → (-sin, 0, -cos)
     const dirX = -Math.sin(human.rotation)
     const dirZ = -Math.cos(human.rotation)
     camera.lookAt(px + dirX * 10, eyeY, pz + dirZ * 10)
-  }, [fpvTarget, camera])
+  }, [fpvHumanId, fpvTarget, camera])
+
+  // §M103 v0.23: 矢印キー / WASD で人物モデルを移動。
+  // 移動は camera の現在の向き (XZ 平面に射影) を基準に Forward / Strafe を計算。
+  // 移動後の XZ 位置を moveHuman に流し、camera 位置もメートル単位で同期する。
+  useEffect(() => {
+    if (fpvHumanId == null) return
+    const stepM = 0.2 // 1 回押すごとに 200mm 進む (Shift で 5×)
+    const handleKey = (e: KeyboardEvent) => {
+      let dz = 0  // forward(-) / back(+)
+      let dx = 0  // strafe right(+) / left(-)
+      switch (e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+          dz = -1
+          break
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+          dz = 1
+          break
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+          dx = -1
+          break
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+          dx = 1
+          break
+        default:
+          return
+      }
+      e.preventDefault()
+      // カメラの forward (XZ 投影、Y を 0 にして水平移動に揃える)
+      const forward = new THREE.Vector3()
+      camera.getWorldDirection(forward)
+      forward.y = 0
+      if (forward.lengthSq() < 1e-6) return
+      forward.normalize()
+      const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize()
+      const speed = e.shiftKey ? stepM * 5 : stepM
+      const move = new THREE.Vector3()
+      // dz = -1 (上 / W) → forward 方向へ
+      move.addScaledVector(forward, -dz * speed)
+      move.addScaledVector(right, dx * speed)
+      camera.position.x += move.x
+      camera.position.z += move.z
+      // 人物モデルの XZ を camera 位置に同期 (mm 整数化)
+      const xMm = Math.round(camera.position.x * 1000)
+      const zMm = Math.round(camera.position.z * 1000)
+      moveHuman(fpvHumanId, [xMm, zMm])
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [fpvHumanId, camera, moveHuman])
 
   if (fpvHumanId != null && fpvTarget != null) {
     return (
@@ -267,6 +335,7 @@ function CameraRig({
 /**
  * §M78 v0.14: FPV 中だけ画面右上に出る「終了」HUD。
  * Canvas の外 (HTML 層) なので、PointerLock の影響を受けずクリックできる。
+ * §M103 v0.23: 操作キーの説明も併記。
  */
 function FpvHud() {
   const fpvHumanId = useEditorStore((s) => s.fpvHumanId)
@@ -286,27 +355,79 @@ function FpvHud() {
         color: 'white',
         fontSize: 12,
         display: 'flex',
-        gap: 10,
-        alignItems: 'center',
+        flexDirection: 'column',
+        gap: 6,
+        alignItems: 'flex-end',
       }}
     >
-      <span>FPV モード (ESC で終了)</span>
-      <button
-        type="button"
-        onClick={() => exitFpv()}
-        data-testid="fpv-exit"
-        style={{
-          border: 'none',
-          background: '#ef4444',
-          color: 'white',
-          padding: '4px 10px',
-          borderRadius: 4,
-          cursor: 'pointer',
-          fontSize: 12,
-        }}
-      >
-        FPV 終了
-      </button>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <span>FPV モード</span>
+        <button
+          type="button"
+          onClick={() => exitFpv()}
+          data-testid="fpv-exit"
+          style={{
+            border: 'none',
+            background: '#ef4444',
+            color: 'white',
+            padding: '4px 10px',
+            borderRadius: 4,
+            cursor: 'pointer',
+            fontSize: 12,
+          }}
+        >
+          FPV 終了
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', lineHeight: 1.4 }}>
+        <div>マウス: 視線回転 / クリック: ドア開閉等</div>
+        <div>↑↓←→ / WASD: 歩く (Shift で 5×) / ESC: 終了</div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * §M103 v0.23: FPV 中の十字クロスヘア (画面中央)。
+ * - PointerLock 中はカーソルが消えるため、視線方向を示すレチクルとして必要
+ * - `pointerEvents: 'none'` にしてクリックは下の canvas (= door 等の onPointerDown) に通す
+ *   → 通常のクリックで「視線先のドアを開閉」など、既存ハンドラがそのまま機能する
+ */
+function FpvCrosshair() {
+  const fpvHumanId = useEditorStore((s) => s.fpvHumanId)
+  if (fpvHumanId == null) return null
+  return (
+    <div
+      data-testid="fpv-crosshair"
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        width: 28,
+        height: 28,
+        transform: 'translate(-50%, -50%)',
+        pointerEvents: 'none',
+        zIndex: 15,
+      }}
+    >
+      <svg width="28" height="28" viewBox="0 0 28 28">
+        {/* 外周リング (薄め) */}
+        <circle
+          cx="14"
+          cy="14"
+          r="10"
+          fill="none"
+          stroke="rgba(255,255,255,0.6)"
+          strokeWidth="1.2"
+        />
+        {/* 横棒 */}
+        <line x1="6" y1="14" x2="22" y2="14" stroke="white" strokeWidth="1.5" />
+        {/* 縦棒 */}
+        <line x1="14" y1="6" x2="14" y2="22" stroke="white" strokeWidth="1.5" />
+        {/* 中央のドット */}
+        <circle cx="14" cy="14" r="1.5" fill="white" />
+      </svg>
     </div>
   )
 }
