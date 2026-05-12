@@ -568,11 +568,25 @@ function WallWithOpenings({
  * - 戻り値の座標系は wall.center を 0 とするローカル系 (壁の長さ方向 X、上方 Y)
  * - solids: 壁マテリアルで埋める箱の列
  * - glass: 窓のとき開口部に薄く立てる「窓ガラス」モック
+ *
+ * §M63 v0.10: 旧 cursor ベースのアルゴリズムを「区間 union ベース」に置換。
+ * 旧実装は開口を positionRatio 順に走査し、cursor が進むたびに次の開口を
+ * 「cursor より右の領域だけ」で扱っていた。このため重なった開口や近接した開口に対して
+ * opWidth=0 となるケースが発生し、ドアの開口穴が壁に空かず、壁本体が
+ * ドアパネルを覆い隠す事故が頻発していた (実際の利用で 2D に置いたドアの半数が 3D に出ない)。
+ *
+ * 新実装:
+ *  1. 各開口を [left, right] 区間にクランプし、union を merged intervals として求める
+ *  2. merged intervals の補集合に「壁全高 (y=0..top) のソリッド」を埋める
+ *  3. 各ドアについて、その区間にリンテル (y=door.height..top) のソリッドとドアパネルを出す
+ *  4. 各窓について、その区間に sill (y=0..sillHeight) + リンテル (y=sillHeight+height..top) + ガラスを出す
+ *
+ * これでどの開口にも必ず「壁が空いている」区間ができ、ドアパネルが壁内に埋もれることが無くなる。
  */
 function splitWallByOpenings(
   wall: WallBox,
   openings: Opening[],
-  ceilingHeight: number,
+  _ceilingHeight: number,
 ): {
   solids: { offsetX: number; y: number; width: number; height: number }[]
   glass: { offsetX: number; y: number; width: number; height: number }[]
@@ -585,18 +599,9 @@ function splitWallByOpenings(
     swingInward: boolean
   }[]
 } {
+  void _ceilingHeight
   const total = wall.size[0]
   const top = wall.size[1]
-  if (openings.length === 0) {
-    return {
-      solids: [{ offsetX: 0, y: 0, width: total, height: top }],
-      glass: [],
-      doorPanels: [],
-    }
-  }
-
-  // ローカル座標: -total/2 .. +total/2。positionRatio=0 を -total/2 に対応
-  const sorted = [...openings].sort((a, b) => a.positionRatio - b.positionRatio)
   const solids: { offsetX: number; y: number; width: number; height: number }[] = []
   const glass: { offsetX: number; y: number; width: number; height: number }[] = []
   const doorPanels: {
@@ -607,75 +612,90 @@ function splitWallByOpenings(
     swingInward: boolean
   }[] = []
 
-  let cursor = -total / 2
-  for (const op of sorted) {
+  if (openings.length === 0) {
+    return {
+      solids: [{ offsetX: 0, y: 0, width: total, height: top }],
+      glass,
+      doorPanels,
+    }
+  }
+
+  // 1. 各開口の [left, right] を計算 (壁端でクランプ、最小幅 50mm 未満は無効)
+  type Iv = { left: number; right: number; op: Opening }
+  const ivs: Iv[] = []
+  for (const op of openings) {
     const center = -total / 2 + op.positionRatio * total
     const half = op.width / 2
-    const leftEdge = Math.max(cursor, center - half)
-    const rightEdge = Math.min(total / 2, center + half)
-
-    // §M56 v0.8: ドアパネルは cursor の進捗に依存させず、壁長クランプだけで判定する。
-    // これにより 2 つ以上の開口が重なっても各 door に必ず 1 枚パネルが立つ
-    if (op.kind === 'door') {
-      const panelLeft = Math.max(-total / 2, center - half)
-      const panelRight = Math.min(total / 2, center + half)
-      const panelWidth = Math.max(0, panelRight - panelLeft)
-      if (panelWidth > 50) {
-        doorPanels.push({
-          offsetX: (panelLeft + panelRight) / 2,
-          y: op.sillHeight,
-          width: panelWidth,
-          height: op.height,
-          swingInward: op.swingInward !== false,
-        })
-      }
+    const left = Math.max(-total / 2, center - half)
+    const right = Math.min(total / 2, center + half)
+    if (right - left > 50) ivs.push({ left, right, op })
+  }
+  if (ivs.length === 0) {
+    return {
+      solids: [{ offsetX: 0, y: 0, width: total, height: top }],
+      glass,
+      doorPanels,
     }
+  }
 
-    if (leftEdge > cursor) {
-      const w = leftEdge - cursor
+  // 2. 区間 union を求める (位置順にソート → 重なるものを merge)
+  const sortedByLeft = [...ivs].sort((a, b) => a.left - b.left)
+  const merged: { left: number; right: number }[] = []
+  for (const iv of sortedByLeft) {
+    const last = merged[merged.length - 1]
+    if (last == null || last.right < iv.left) {
+      merged.push({ left: iv.left, right: iv.right })
+    } else {
+      last.right = Math.max(last.right, iv.right)
+    }
+  }
+
+  // 3. merged interval の隙間に「全高ソリッド」を埋める
+  let cursor = -total / 2
+  for (const m of merged) {
+    if (m.left > cursor) {
+      const w = m.left - cursor
       solids.push({ offsetX: cursor + w / 2, y: 0, width: w, height: top })
     }
-    const opLeft = Math.max(cursor, leftEdge)
-    const opRight = rightEdge
-    const opWidth = Math.max(0, opRight - opLeft)
-    if (opWidth > 0) {
-      // sill (下) と lintel (上) を solid として加える
-      if (op.sillHeight > 0) {
-        solids.push({
-          offsetX: opLeft + opWidth / 2,
-          y: 0,
-          width: opWidth,
-          height: op.sillHeight,
-        })
-      }
-      const headHeight = top - (op.sillHeight + op.height)
-      if (headHeight > 0) {
-        solids.push({
-          offsetX: opLeft + opWidth / 2,
-          y: op.sillHeight + op.height,
-          width: opWidth,
-          height: headHeight,
-        })
-      }
-      // 窓ガラスは透明箱を 1 枚立てる (door panel は上で push 済み)。
-      if (op.kind === 'window') {
-        glass.push({
-          offsetX: opLeft + opWidth / 2,
-          y: op.sillHeight,
-          width: opWidth,
-          height: op.height,
-        })
-      }
-      cursor = opRight
-    } else {
-      cursor = Math.max(cursor, rightEdge)
-    }
-    if (cursor >= total / 2) break
-    if (cursor < ceilingHeight * 0) cursor = leftEdge // dummy: keep ts happy without unused var warning
+    cursor = m.right
   }
   if (cursor < total / 2) {
     const w = total / 2 - cursor
     solids.push({ offsetX: cursor + w / 2, y: 0, width: w, height: top })
+  }
+
+  // 4. 各開口ごとに sill / lintel / glass / doorPanel を push (重なりは Z-fight を許容)
+  for (const iv of ivs) {
+    const { op, left, right } = iv
+    const width = right - left
+    const offsetX = (left + right) / 2
+    if (op.kind === 'door') {
+      // ドアは床直 (sillHeight=0) を前提とするが、念のため値を尊重
+      if (op.sillHeight > 0) {
+        solids.push({ offsetX, y: 0, width, height: op.sillHeight })
+      }
+      const headY = op.sillHeight + op.height
+      if (headY < top) {
+        solids.push({ offsetX, y: headY, width, height: top - headY })
+      }
+      doorPanels.push({
+        offsetX,
+        y: op.sillHeight,
+        width,
+        height: op.height,
+        swingInward: op.swingInward !== false,
+      })
+    } else {
+      // 窓: 下に sill、上に lintel、開口部にガラス
+      if (op.sillHeight > 0) {
+        solids.push({ offsetX, y: 0, width, height: op.sillHeight })
+      }
+      const headY = op.sillHeight + op.height
+      if (headY < top) {
+        solids.push({ offsetX, y: headY, width, height: top - headY })
+      }
+      glass.push({ offsetX, y: op.sillHeight, width, height: op.height })
+    }
   }
   return { solids, glass, doorPanels }
 }
