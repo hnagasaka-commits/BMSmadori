@@ -173,6 +173,10 @@ export type FloorplanState = {
     roomId: string,
     material: 'wood' | 'kitchen' | 'tile' | 'concrete' | 'grass' | undefined,
   ) => void
+  /**
+   * §M114 v0.27: 部屋の壁紙色を上書き (`undefined` で metadata 既定にフォールバック)
+   */
+  setRoomWallpaperColor: (roomId: string, color: string | undefined) => void
 
   // §M30 自立壁 (部屋に紐づかない手書きの壁)
   /** 自立壁を 1 本追加。from→to は mm、軸並行を期待 */
@@ -635,6 +639,30 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     )
     set({ floorplan: replaceFloor(state.floorplan, { ...floor, rooms: nextRooms }, floorIdx) })
     return true
+  },
+
+  setRoomWallpaperColor: (roomId, color) => {
+    const state = get()
+    const floorIdx = state.activeFloorIndex
+    const floor = state.floorplan.floors[floorIdx]
+    if (floor == null) return
+    const idx = floor.rooms.findIndex((r) => r.id === roomId)
+    if (idx < 0) return
+    const room = floor.rooms[idx]!
+    if (color === undefined || color === '') {
+      if (room.wallpaperColor === undefined) return
+      const { wallpaperColor: _drop, ...rest } = room
+      void _drop
+      const nextRooms = floor.rooms.map((r, i) => (i === idx ? rest : r))
+      snapshotForHistory(state.floorplan)
+      set({ floorplan: replaceFloor(state.floorplan, { ...floor, rooms: nextRooms }, floorIdx) })
+      return
+    }
+    if (room.wallpaperColor === color) return
+    const next = { ...room, wallpaperColor: color }
+    const nextRooms = floor.rooms.map((r, i) => (i === idx ? next : r))
+    snapshotForHistory(state.floorplan)
+    set({ floorplan: replaceFloor(state.floorplan, { ...floor, rooms: nextRooms }, floorIdx) })
   },
 
   setRoomFloorMaterial: (roomId, material) => {

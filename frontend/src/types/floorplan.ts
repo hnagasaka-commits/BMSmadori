@@ -347,6 +347,13 @@ export type Room = {
    * 未指定なら `pickFloorTextureKind(presetId)` の既定が使われる。
    */
   floorMaterial?: FloorMaterialKind
+  /**
+   * §M114 v0.27: この部屋の **内壁** に貼る壁紙色 (#rrggbb)。
+   * 未指定 (undefined) なら `metadata.wallpaperColor` (Floorplan 全体既定) → デフォルト
+   * (#f5f1ea) の順でフォールバック。
+   * 共有壁の場合は両側で異なる色になる (= 各部屋から見たときに自分の色が見える)。
+   */
+  wallpaperColor?: string
 }
 
 // ============================================================================

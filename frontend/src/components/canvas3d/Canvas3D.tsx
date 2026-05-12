@@ -1263,15 +1263,31 @@ function WallWithOpenings({
     () => repeatedClone(sourceTexture, { w: wallLen, h: wallH }),
     [sourceTexture, wallLen, wallH],
   )
-  // §M108 v0.25: 壁紙色の上書き (内部壁 / shared / interior / railing 以外の通常壁) に適用。
-  // exterior (外壁・サイディング) は影響しない。
+  // §M108 v0.25 / §M114 v0.27: 壁紙色は (a) 部屋ごとの上書き → (b) Floorplan 全体既定 →
+  // (c) WALL_MATERIAL.color の優先で解決。各面 (+Z / -Z) に接する部屋を `wall.roomOnPosZ/NegZ`
+  // から取得して独立に色を当てる。
   const wallpaperColor = useFloorplanStore((s) => s.floorplan.metadata.wallpaperColor)
+  const rooms = useFloorplanStore(
+    (s) => s.floorplan.floors[s.activeFloorIndex]?.rooms,
+  )
+  const resolveSideColor = (roomId: string | null | undefined): string => {
+    if (wall.kind === 'exterior' && roomId == null) return material.color
+    if (roomId != null && rooms != null) {
+      const r = rooms.find((x) => x.id === roomId)
+      if (r?.wallpaperColor != null) return r.wallpaperColor
+    }
+    return wallpaperColor ?? material.color
+  }
+  const colorPosZ = resolveSideColor(wall.roomOnPosZ)
+  const colorNegZ = resolveSideColor(wall.roomOnNegZ)
+  // 既存 API 互換: 後で「片面のみ」描画する際に使う代表色
   const effectiveColor =
     wall.kind === 'exterior'
       ? material.color
       : wallpaperColor != null
         ? wallpaperColor
         : material.color
+  void effectiveColor
 
   // §M60 v0.9: 非表示壁 (hiddenWallIds) は壁本体 (solids) と窓ガラスを描かないが、
   // ドアパネルだけは独立して残す。ドアは家具同様ユーザーが置いた要素なので、
@@ -1300,28 +1316,54 @@ function WallWithOpenings({
       position={[wall.center[0] * MM_TO_M, 0, wall.center[2] * MM_TO_M]}
       rotation={[0, wall.rotationY, 0]}
     >
-      {!wall.hidden && segs.solids.map((s, i) => (
-        <mesh
-          key={`solid-${i}`}
-          position={[s.offsetX * MM_TO_M, (s.y + s.height / 2) * MM_TO_M, 0]}
-          castShadow
-          receiveShadow
-        >
-          <boxGeometry
-            args={[
-              s.width * MM_TO_M,
-              s.height * MM_TO_M,
-              wall.size[2] * MM_TO_M,
+      {/* §M114 v0.27: 壁の各 solid を「+Z 半分 / -Z 半分」の 2 メッシュに分割し、
+          各面に接する部屋の wallpaperColor を独立に適用する。
+          half thickness の box を ±wall.thickness/4 オフセットで配置。 */}
+      {!wall.hidden && segs.solids.flatMap((s, i) => {
+        const halfThick = wall.size[2] / 2
+        return [
+          <mesh
+            key={`solid-pz-${i}`}
+            position={[
+              s.offsetX * MM_TO_M,
+              (s.y + s.height / 2) * MM_TO_M,
+              (halfThick / 2) * MM_TO_M,
             ]}
-          />
-          <meshStandardMaterial
-            map={wallTexture}
-            color={effectiveColor}
-            roughness={material.roughness}
-            metalness={material.metalness}
-          />
-        </mesh>
-      ))}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry
+              args={[s.width * MM_TO_M, s.height * MM_TO_M, halfThick * MM_TO_M]}
+            />
+            <meshStandardMaterial
+              map={wallTexture}
+              color={colorPosZ}
+              roughness={material.roughness}
+              metalness={material.metalness}
+            />
+          </mesh>,
+          <mesh
+            key={`solid-nz-${i}`}
+            position={[
+              s.offsetX * MM_TO_M,
+              (s.y + s.height / 2) * MM_TO_M,
+              -(halfThick / 2) * MM_TO_M,
+            ]}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry
+              args={[s.width * MM_TO_M, s.height * MM_TO_M, halfThick * MM_TO_M]}
+            />
+            <meshStandardMaterial
+              map={wallTexture}
+              color={colorNegZ}
+              roughness={material.roughness}
+              metalness={material.metalness}
+            />
+          </mesh>,
+        ]
+      })}
       {!wall.hidden && segs.glass.map((g, i) => (
         <mesh
           key={`glass-${i}`}

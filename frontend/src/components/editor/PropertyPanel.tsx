@@ -122,6 +122,7 @@ function RoomProperties({ roomId }: { roomId: string }) {
   const removeRoom = useFloorplanStore((s) => s.removeRoom)
   const updateRoomPreset = useFloorplanStore((s) => s.updateRoomPreset)
   const setRoomFloorMaterial = useFloorplanStore((s) => s.setRoomFloorMaterial)
+  const setRoomWallpaperColor = useFloorplanStore((s) => s.setRoomWallpaperColor)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
   if (room == null) return null
@@ -245,6 +246,32 @@ function RoomProperties({ roomId }: { roomId: string }) {
         <div className="property-row">
           <span className="label">坪</span>
           <span className="value">{areaUnits.tsubo.toFixed(2)}</span>
+        </div>
+      </div>
+
+      {/* §M114 v0.27: 部屋ごとの壁紙色。設定すると共有壁の「この部屋側」だけ着色される */}
+      <div className="property-section">
+        <h3>壁紙</h3>
+        <div className="property-row">
+          <span className="label">色</span>
+          <input
+            type="color"
+            value={room.wallpaperColor ?? '#f5f1ea'}
+            onChange={(e) => setRoomWallpaperColor(room.id, e.target.value)}
+            data-testid="room-wallpaper-color"
+            aria-label="部屋の壁紙色"
+            style={{ width: 40, height: 28, padding: 0, border: 'none', cursor: 'pointer' }}
+          />
+          <button
+            type="button"
+            onClick={() => setRoomWallpaperColor(room.id, undefined)}
+            disabled={room.wallpaperColor == null}
+            data-testid="room-wallpaper-clear"
+            style={{ marginLeft: 6, fontSize: 11, padding: '2px 8px' }}
+            title="全体既定の壁紙色に戻す"
+          >
+            戻す
+          </button>
         </div>
       </div>
 

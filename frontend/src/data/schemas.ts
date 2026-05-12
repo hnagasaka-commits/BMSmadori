@@ -208,6 +208,8 @@ const RoomSchema = z.object({
     .optional(),
   // §M109 v0.25: 床テクスチャの上書き
   floorMaterial: z.enum(['wood', 'kitchen', 'tile', 'concrete', 'grass']).optional(),
+  // §M114 v0.27: 部屋ごとの壁紙色 (#rrggbb)
+  wallpaperColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 })
 
 // ============================================================================

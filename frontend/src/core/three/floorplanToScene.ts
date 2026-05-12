@@ -37,6 +37,12 @@ export type WallBox = {
    * これで手摺をバルコニー床の外側 (建物の外周側) に張り付けて描画できる。
    */
   outsideSign?: -1 | 1
+  /**
+   * §M114 v0.27: 壁の +Z / -Z 各面に接する部屋 ID。null なら "外気側" (= 外壁)。
+   * これで「両面別々の壁紙色」を 3D で実現する。
+   */
+  roomOnPosZ?: string | null
+  roomOnNegZ?: string | null
 }
 
 /**
@@ -131,7 +137,14 @@ const DEFAULT_WALL_HEIGHT_MM = 2400
  * Phase 1 / 1.5 の制約に依存しているため、polygon 部屋や 90° 以外の回転は無視 (将来追加)。
  */
 export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): SceneSpec {
-  const ceilingHeight = metadata.gridSize > 0 ? DEFAULT_WALL_HEIGHT_MM : DEFAULT_WALL_HEIGHT_MM
+  // §M113 v0.27: 旧コードは `metadata.gridSize > 0 ? DEFAULT : DEFAULT` (常に既定 2400) を返していて、
+  // M104 で `floor.ceilingHeight` の編集 UI を入れたのに 3D に反映されない致命的バグだった。
+  // 正しく `floor.ceilingHeight` を優先し、未指定 (古いデータ) のときだけ既定を使う
+  void metadata
+  const ceilingHeight =
+    typeof floor.ceilingHeight === 'number' && floor.ceilingHeight > 0
+      ? floor.ceilingHeight
+      : DEFAULT_WALL_HEIGHT_MM
 
   const floorPlates: FloorPlate[] = []
   if (Array.isArray(floor.rooms)) {
@@ -444,6 +457,22 @@ function wallToBox(
     outsideSign = dot > 0 ? -1 : 1
   }
 
+  // §M114 v0.27: 壁の +Z / -Z 各面に接する部屋 ID を計算 (両面壁紙対応)。
+  // sharedBy の各部屋について「部屋中心 - 壁中心」を wall-local +Z 方向と内積し、
+  // 正なら +Z 側、負なら -Z 側に割り当てる。
+  let roomOnPosZ: string | null = null
+  let roomOnNegZ: string | null = null
+  for (const rid of wall.sharedBy) {
+    const r = roomById.get(rid)
+    if (r == null) continue
+    const aabb = shapeAabb(r.shape, r.rotation)
+    const rcx = (aabb.minX + aabb.maxX) / 2
+    const rcy = (aabb.minY + aabb.maxY) / 2
+    const dot = (rcx - cx) * (-dy) + (rcy - cz) * dx
+    if (dot > 0) roomOnPosZ = rid
+    else roomOnNegZ = rid
+  }
+
   const result: WallBox = {
     id: wall.id,
     center: [cx, cy, cz],
@@ -452,6 +481,8 @@ function wallToBox(
     kind,
   }
   if (outsideSign !== undefined) result.outsideSign = outsideSign
+  result.roomOnPosZ = roomOnPosZ
+  result.roomOnNegZ = roomOnNegZ
   return result
 }
 
