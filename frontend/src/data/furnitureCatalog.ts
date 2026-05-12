@@ -1088,6 +1088,485 @@ const ENTRIES: FurnitureCatalogEntry[] = [
       },
     ],
   },
+  // §M105 v0.24: 家電類を大幅追加
+  // ---- リビング系 (TV / AV / 空調 / 空気家電) ----
+  {
+    id: 'tv-32',
+    displayName: 'テレビ 32 インチ',
+    category: 'living',
+    minRoom: { w: 740, h: 80 },
+    pieces: [
+      {
+        id: 'screen',
+        position: [0, 250, 0],
+        size: [720, 440, 60],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.3, metalness: 0.3 },
+      },
+      {
+        id: 'bezel',
+        position: [0, 250, 32],
+        size: [710, 420, 4],
+        shape: 'box',
+        material: { color: '#2a2a3a', roughness: 0.5, metalness: 0.2 },
+      },
+    ],
+  },
+  {
+    id: 'tv-55',
+    displayName: 'テレビ 55 インチ',
+    category: 'living',
+    minRoom: { w: 1240, h: 100 },
+    pieces: [
+      {
+        id: 'screen',
+        position: [0, 350, 0],
+        size: [1230, 720, 80],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.3, metalness: 0.3 },
+      },
+      {
+        id: 'bezel',
+        position: [0, 350, 42],
+        size: [1220, 700, 4],
+        shape: 'box',
+        material: { color: '#2a2a3a', roughness: 0.5, metalness: 0.2 },
+      },
+    ],
+  },
+  {
+    id: 'air-conditioner',
+    displayName: 'エアコン (壁掛け)',
+    category: 'living',
+    minRoom: { w: 800, h: 300 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 2150, 0],
+        size: [800, 280, 250],
+        shape: 'box',
+        material: { color: '#f5f5f5', roughness: 0.4, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'air-purifier',
+    displayName: '空気清浄機',
+    category: 'living',
+    minRoom: { w: 380, h: 280 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 350, 0],
+        size: [360, 700, 260],
+        shape: 'box',
+        material: { color: '#dadcde', roughness: 0.5, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'standing-fan',
+    displayName: '扇風機',
+    category: 'misc',
+    minRoom: { w: 400, h: 400 },
+    pieces: [
+      {
+        id: 'base',
+        position: [0, 20, 0],
+        size: [380, 40, 380],
+        shape: 'cylinder',
+        material: { color: '#f5f5f5', roughness: 0.5, metalness: 0.1 },
+      },
+      {
+        id: 'pole',
+        position: [0, 500, 0],
+        size: [40, 900, 40],
+        shape: 'cylinder',
+        material: { color: '#c8c8c8', roughness: 0.3, metalness: 0.5 },
+      },
+      {
+        id: 'head',
+        position: [0, 1050, 0],
+        size: [420, 80, 420],
+        shape: 'cylinder',
+        material: { color: '#f5f5f5', roughness: 0.5, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'dehumidifier',
+    displayName: '除湿機',
+    category: 'misc',
+    minRoom: { w: 320, h: 260 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 285, 0],
+        size: [300, 570, 240],
+        shape: 'box',
+        material: { color: '#e8e8e8', roughness: 0.5, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'humidifier',
+    displayName: '加湿器',
+    category: 'bedroom',
+    minRoom: { w: 240, h: 240 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 175, 0],
+        size: [220, 350, 220],
+        shape: 'cylinder',
+        material: { color: '#f0e8d8', roughness: 0.5, metalness: 0.05 },
+      },
+    ],
+  },
+  {
+    id: 'soundbar',
+    displayName: 'サウンドバー',
+    category: 'living',
+    minRoom: { w: 920, h: 90 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 40, 0],
+        size: [900, 80, 80],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.4, metalness: 0.2 },
+      },
+    ],
+  },
+  {
+    id: 'game-console',
+    displayName: 'ゲーム機',
+    category: 'living',
+    minRoom: { w: 280, h: 220 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 45, 0],
+        size: [260, 90, 200],
+        shape: 'box',
+        material: { color: '#0a0a0a', roughness: 0.45, metalness: 0.25 },
+      },
+    ],
+  },
+  {
+    id: 'smart-speaker',
+    displayName: 'スマートスピーカー',
+    category: 'living',
+    minRoom: { w: 120, h: 120 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 75, 0],
+        size: [100, 150, 100],
+        shape: 'cylinder',
+        material: { color: '#5a5a5a', roughness: 0.7, metalness: 0.1 },
+      },
+    ],
+  },
+  // ---- キッチン家電 ----
+  {
+    id: 'rice-cooker',
+    displayName: '炊飯器',
+    category: 'kitchen',
+    minRoom: { w: 320, h: 320 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 130, 0],
+        size: [300, 260, 300],
+        shape: 'box',
+        material: { color: '#bdbdbd', roughness: 0.4, metalness: 0.45 },
+      },
+    ],
+  },
+  {
+    id: 'toaster-oven',
+    displayName: 'オーブントースター',
+    category: 'kitchen',
+    minRoom: { w: 380, h: 320 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 120, 0],
+        size: [360, 240, 300],
+        shape: 'box',
+        material: { color: '#2a2a2a', roughness: 0.5, metalness: 0.3 },
+      },
+      {
+        id: 'door',
+        position: [0, 120, 150],
+        size: [350, 220, 4],
+        shape: 'box',
+        material: { color: '#1c1c1c', roughness: 0.1, metalness: 0.5 },
+      },
+    ],
+  },
+  {
+    id: 'coffee-maker',
+    displayName: 'コーヒーメーカー',
+    category: 'kitchen',
+    minRoom: { w: 240, h: 240 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 175, 0],
+        size: [220, 350, 220],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.4, metalness: 0.4 },
+      },
+    ],
+  },
+  {
+    id: 'electric-kettle',
+    displayName: '電気ケトル',
+    category: 'kitchen',
+    minRoom: { w: 200, h: 160 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 130, 0],
+        size: [180, 240, 140],
+        shape: 'cylinder',
+        material: { color: '#f5f5f5', roughness: 0.4, metalness: 0.3 },
+      },
+    ],
+  },
+  {
+    id: 'gas-stove',
+    displayName: 'ガスコンロ',
+    category: 'kitchen',
+    minRoom: { w: 740, h: 540 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 45, 0],
+        size: [720, 90, 520],
+        shape: 'box',
+        material: { color: '#2a2a2a', roughness: 0.3, metalness: 0.5 },
+      },
+      {
+        id: 'burner-l',
+        position: [-180, 95, 0],
+        size: [140, 30, 140],
+        shape: 'cylinder',
+        material: { color: '#3a3a3a', roughness: 0.4, metalness: 0.5 },
+      },
+      {
+        id: 'burner-r',
+        position: [180, 95, 0],
+        size: [140, 30, 140],
+        shape: 'cylinder',
+        material: { color: '#3a3a3a', roughness: 0.4, metalness: 0.5 },
+      },
+    ],
+  },
+  {
+    id: 'range-hood',
+    displayName: 'レンジフード',
+    category: 'kitchen',
+    minRoom: { w: 760, h: 500 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 1750, 0],
+        size: [750, 250, 500],
+        shape: 'box',
+        material: { color: '#9aa0a6', roughness: 0.4, metalness: 0.6 },
+      },
+      {
+        id: 'chimney',
+        position: [0, 2100, -180],
+        size: [300, 450, 200],
+        shape: 'box',
+        material: { color: '#9aa0a6', roughness: 0.4, metalness: 0.6 },
+      },
+    ],
+  },
+  // ---- 水回り家電 ----
+  {
+    id: 'clothes-dryer',
+    displayName: '衣類乾燥機',
+    category: 'bath',
+    minRoom: { w: 640, h: 640 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 425, 0],
+        size: [600, 850, 600],
+        shape: 'box',
+        material: { color: '#f1f1f1', roughness: 0.5, metalness: 0.2 },
+      },
+      {
+        id: 'door',
+        position: [0, 480, 295],
+        size: [400, 400, 8],
+        shape: 'cylinder',
+        material: { color: '#3a3a3a', roughness: 0.1, metalness: 0.4 },
+      },
+    ],
+  },
+  // ---- 作業・掃除系 ----
+  {
+    id: 'iron-board',
+    displayName: 'アイロン台',
+    category: 'misc',
+    minRoom: { w: 1300, h: 460 },
+    pieces: [
+      {
+        id: 'top',
+        position: [0, 740, 0],
+        size: [1300, 30, 380],
+        shape: 'box',
+        material: { color: '#dddbd0', roughness: 0.8, metalness: 0.0 },
+      },
+      {
+        id: 'leg',
+        position: [0, 370, 0],
+        size: [40, 720, 40],
+        shape: 'box',
+        material: { color: '#c0c0c0', roughness: 0.4, metalness: 0.6 },
+      },
+    ],
+  },
+  {
+    id: 'robot-vacuum',
+    displayName: 'ロボット掃除機',
+    category: 'misc',
+    minRoom: { w: 380, h: 380 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 50, 0],
+        size: [350, 90, 350],
+        shape: 'cylinder',
+        material: { color: '#2a2a2a', roughness: 0.4, metalness: 0.3 },
+      },
+    ],
+  },
+  {
+    id: 'stick-vacuum',
+    displayName: 'スティック掃除機',
+    category: 'misc',
+    minRoom: { w: 250, h: 250 },
+    pieces: [
+      {
+        id: 'head',
+        position: [0, 30, 0],
+        size: [240, 60, 200],
+        shape: 'box',
+        material: { color: '#7a3a3a', roughness: 0.4, metalness: 0.3 },
+      },
+      {
+        id: 'pole',
+        position: [0, 600, 0],
+        size: [40, 1100, 40],
+        shape: 'cylinder',
+        material: { color: '#9a9a9a', roughness: 0.3, metalness: 0.7 },
+      },
+      {
+        id: 'handle',
+        position: [0, 1180, 0],
+        size: [80, 100, 60],
+        shape: 'box',
+        material: { color: '#5a3a3a', roughness: 0.5, metalness: 0.2 },
+      },
+    ],
+  },
+  // ---- ワーク系 ----
+  {
+    id: 'desktop-pc',
+    displayName: 'デスクトップ PC',
+    category: 'work',
+    minRoom: { w: 220, h: 460 },
+    pieces: [
+      {
+        id: 'tower',
+        position: [0, 220, 0],
+        size: [200, 440, 420],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.4, metalness: 0.3 },
+      },
+    ],
+  },
+  {
+    id: 'monitor-24',
+    displayName: 'PC モニター 24"',
+    category: 'work',
+    minRoom: { w: 560, h: 220 },
+    pieces: [
+      {
+        id: 'screen',
+        position: [0, 480, 0],
+        size: [540, 320, 30],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.3, metalness: 0.3 },
+      },
+      {
+        id: 'stand',
+        position: [0, 160, 60],
+        size: [200, 320, 30],
+        shape: 'box',
+        material: { color: '#2a2a2a', roughness: 0.5, metalness: 0.4 },
+      },
+      {
+        id: 'base',
+        position: [0, 8, 60],
+        size: [260, 16, 200],
+        shape: 'box',
+        material: { color: '#2a2a2a', roughness: 0.5, metalness: 0.4 },
+      },
+    ],
+  },
+  {
+    id: 'printer',
+    displayName: 'プリンター (複合機)',
+    category: 'work',
+    minRoom: { w: 460, h: 400 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 150, 0],
+        size: [440, 300, 380],
+        shape: 'box',
+        material: { color: '#dadada', roughness: 0.55, metalness: 0.15 },
+      },
+    ],
+  },
+  // ---- リビング小物 ----
+  {
+    id: 'kotatsu',
+    displayName: 'こたつ',
+    category: 'living',
+    minRoom: { w: 1200, h: 800 },
+    pieces: [
+      {
+        id: 'top',
+        position: [0, 380, 0],
+        size: [1200, 30, 800],
+        shape: 'box',
+        material: { color: '#6e4f33', roughness: 0.7, metalness: 0.0 },
+      },
+      {
+        id: 'futon',
+        position: [0, 320, 0],
+        size: [1500, 80, 1100],
+        shape: 'box',
+        material: { color: '#7a3a2a', roughness: 0.95, metalness: 0.0 },
+      },
+      {
+        id: 'leg',
+        position: [0, 180, 0],
+        size: [1120, 360, 720],
+        shape: 'box',
+        material: { color: '#5a3a22', roughness: 0.7, metalness: 0.0 },
+      },
+    ],
+  },
 ]
 
 const BY_ID = new Map(ENTRIES.map((e) => [e.id, e]))

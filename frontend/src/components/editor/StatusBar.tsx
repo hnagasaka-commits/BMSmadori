@@ -19,6 +19,10 @@ export function StatusBar() {
   const setActiveFloor = useFloorplanStore((s) => s.setActiveFloor)
   const addFloor = useFloorplanStore((s) => s.addFloor)
   const removeFloor = useFloorplanStore((s) => s.removeFloor)
+  // §M104 v0.24: 編集中の階の天井高 (= 壁高さ) を表示 & 編集
+  const activeCeilingHeight =
+    useFloorplanStore((s) => s.floorplan.floors[s.activeFloorIndex]?.ceilingHeight) ?? 2400
+  const updateFloorMeta = useFloorplanStore((s) => s.updateFloorMeta)
   const gridSize = useEditorStore((s) => s.gridSize)
   const readonly = useEditorStore((s) => s.readonly)
 
@@ -124,6 +128,28 @@ export function StatusBar() {
       <span style={{ marginLeft: 12 }}>部屋: {rooms.length}</span>
       <span>壁: {walls.length}</span>
       <span>グリッド: {gridSize}mm</span>
+      {/* §M104 v0.24: 天井高 (= 全ての壁の高さ) を編集できる。階ごとに独立。 */}
+      <label
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8 }}
+        title="現在の階の天井高 (= 全ての壁の高さ) を mm 単位で変更"
+      >
+        <span>天井高:</span>
+        <input
+          type="number"
+          value={activeCeilingHeight}
+          step={50}
+          min={2000}
+          max={5000}
+          onChange={(e) =>
+            updateFloorMeta(activeIdx, { ceilingHeight: Number(e.target.value) })
+          }
+          disabled={readonly}
+          data-testid="ceiling-height-input"
+          aria-label="天井高 (mm)"
+          style={{ width: 64, padding: '1px 4px', fontSize: 12 }}
+        />
+        <span>mm</span>
+      </label>
     </footer>
   )
 }

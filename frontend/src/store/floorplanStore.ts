@@ -430,8 +430,10 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const next: Floor = {
       ...target,
       ...(patch.name !== undefined && { name: patch.name }),
+      // §M104 v0.24: 天井高は 2000〜5000mm の範囲にクランプ。
+      // ユーザー設定 UI (StatusBar の入力) から呼ばれる
       ...(patch.ceilingHeight !== undefined && {
-        ceilingHeight: Math.max(2000, Math.round(patch.ceilingHeight)),
+        ceilingHeight: Math.min(5000, Math.max(2000, Math.round(patch.ceilingHeight))),
       }),
       ...(patch.level !== undefined && { level: patch.level }),
     }
