@@ -170,8 +170,9 @@ export function makeSidingTexture(): ColorTexture {
 export function pickFloorTextureKind(presetId: string): FloorTextureKind {
   if (presetId === 'bathroom' || presetId === 'toilet') return 'tile'
   if (presetId === 'kitchen' || presetId === 'kitchen-gas' || presetId === 'washroom') return 'kitchen'
-  if (presetId === 'entrance') return 'concrete'
-  // §M71 v0.12: 庭は屋外なので芝生テクスチャ。バルコニーは木調 (将来 deck テクスチャに差し替え予定)
+  // §M74 v0.13: バルコニーは屋外コンクリート床 (玄関と同じテクスチャを流用)
+  if (presetId === 'entrance' || presetId === 'balcony') return 'concrete'
+  // §M71 v0.12: 庭は屋外なので芝生テクスチャ
   if (presetId === 'garden') return 'grass'
   return 'wood'
 }

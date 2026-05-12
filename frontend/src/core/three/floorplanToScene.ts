@@ -9,7 +9,7 @@
  *   テスト容易性のため (M12-b の単体テスト)。
  */
 
-import type { Door, Floor, FloorplanMetadata, Wall, Window as FpWindow } from '@/types'
+import type { Door, Floor, FloorplanMetadata, Room, Wall, Window as FpWindow } from '@/types'
 import { shapeAabb, shapeVertices } from '@/core/geometry'
 
 export type Vec3 = readonly [number, number, number]
@@ -31,6 +31,12 @@ export type WallBox = {
    * 載っているドア/窓のヒント (= 開口部マッチ) は引き続き使うため WallBox 自体は残す。
    */
   hidden?: boolean
+  /**
+   * §M75 v0.13: kind='railing' の壁限定。
+   * 部屋の「外側」を指す wall-local +Z 方向の符号 (-1 / +1)。
+   * これで手摺をバルコニー床の外側 (建物の外周側) に張り付けて描画できる。
+   */
+  outsideSign?: -1 | 1
 }
 
 /**
@@ -134,10 +140,11 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
     }
   }
 
-  // §M70 v0.12: バルコニー外周判定用に roomId → presetId の lookup を作る
-  const roomPresetById = new Map<string, string>()
+  // §M70 v0.12 / §M75 v0.13: バルコニー外周判定 + outsideSign 計算用に
+  // roomId → Room の lookup を作る
+  const roomById = new Map<string, Room>()
   if (Array.isArray(floor.rooms)) {
-    for (const room of floor.rooms) roomPresetById.set(room.id, room.presetId)
+    for (const room of floor.rooms) roomById.set(room.id, room)
   }
 
   const walls: WallBox[] = []
@@ -146,7 +153,7 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
   const hidden = new Set(floor.hiddenWallIds ?? [])
   if (Array.isArray(floor.walls)) {
     for (const wall of floor.walls) {
-      const wb = wallToBox(wall, ceilingHeight, roomPresetById)
+      const wb = wallToBox(wall, ceilingHeight, roomById)
       if (wb == null) continue
       if (hidden.has(wall.id)) wb.hidden = true
       walls.push(wb)
@@ -155,7 +162,7 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
   // §M30: freestandingWalls も 3D に出す
   if (Array.isArray(floor.freestandingWalls)) {
     for (const wall of floor.freestandingWalls) {
-      const wb = wallToBox(wall, ceilingHeight, roomPresetById)
+      const wb = wallToBox(wall, ceilingHeight, roomById)
       if (wb != null) walls.push(wb)
     }
   }
@@ -183,7 +190,7 @@ export function floorplanToScene(floor: Floor, metadata: FloorplanMetadata): Sce
 function wallToBox(
   wall: Wall,
   ceilingHeight: number,
-  roomPresetById: ReadonlyMap<string, string>,
+  roomById: ReadonlyMap<string, Room>,
 ): WallBox | null {
   const [x1, y1] = wall.from
   const [x2, y2] = wall.to
@@ -200,8 +207,14 @@ function wallToBox(
 
   // §M70 v0.12: balcony の外周壁 (= sharedBy が balcony 1 件だけ) は railing とする。
   // sharedBy.length === 1 で唯一の部屋が balcony プリセットの時に限定 (家側に接する壁は通常壁)
-  const isBalconyRailing =
-    wall.sharedBy.length === 1 && roomPresetById.get(wall.sharedBy[0]!) === 'balcony'
+  const balconyRoom =
+    wall.sharedBy.length === 1
+      ? (() => {
+          const r = roomById.get(wall.sharedBy[0]!)
+          return r != null && r.presetId === 'balcony' ? r : null
+        })()
+      : null
+  const isBalconyRailing = balconyRoom != null
 
   const kind: WallBox['kind'] = isBalconyRailing
     ? 'railing'
@@ -211,13 +224,29 @@ function wallToBox(
         ? 'shared'
         : 'interior'
 
-  return {
+  // §M75 v0.13: railing の場合、部屋の「外側」を指す wall-local +Z の符号を計算する。
+  //  three.js での wall-local +Z は world (-dy/L, 0, dx/L) (Y 軸回転 rotationY 後)。
+  //  floorplan 平面で言えば (-dy, dx) の方向に向く。
+  //  部屋中心が +Z 側にあるなら 外側 = -Z (outsideSign=-1)、逆なら +1。
+  let outsideSign: -1 | 1 | undefined
+  if (isBalconyRailing && balconyRoom != null) {
+    const aabb = shapeAabb(balconyRoom.shape, balconyRoom.rotation)
+    const rcx = (aabb.minX + aabb.maxX) / 2
+    const rcy = (aabb.minY + aabb.maxY) / 2
+    // wall-local +Z 方向のワールド表現 = (-dy/L, dx/L)。部屋中心 - 壁中心 と内積
+    const dot = (rcx - cx) * (-dy) + (rcy - cz) * dx
+    outsideSign = dot > 0 ? -1 : 1
+  }
+
+  const result: WallBox = {
     id: wall.id,
     center: [cx, cy, cz],
     size: [length, sizeY, wall.thickness],
     rotationY,
     kind,
   }
+  if (outsideSign !== undefined) result.outsideSign = outsideSign
+  return result
 }
 
 function doorToOpening(d: Door): Opening {

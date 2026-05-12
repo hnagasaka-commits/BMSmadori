@@ -14,8 +14,8 @@
  * 描画頻度は OrbitControls の damping のみ。Konva 側の状態を直接購読しているので、
  * 2D で変更すると useFloorplanStore → SceneSpec 再計算 → React 再描画。
  */
-import { Suspense, useMemo } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Suspense, useMemo, useRef, useState } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { ContactShadows, OrbitControls, Sky } from '@react-three/drei'
 import * as THREE from 'three'
 import { useFloorplanStore } from '@/store/floorplanStore'
@@ -171,6 +171,8 @@ export function Canvas3D() {
             minDistance={1}
             maxDistance={cameraDistance * 4}
             maxPolarAngle={Math.PI / 2.05}
+            // §M73 v0.13: ホイールズームをカーソル位置基準に (CAD 系の挙動)
+            zoomToCursor
             makeDefault
           />
         </Suspense>
@@ -466,36 +468,114 @@ function DoorPanelsLayer({ scene }: { scene: SceneSpec }) {
           const right = Math.min(total / 2, center + half)
           const widthMm = right - left
           if (widthMm < 10) return null
-          const offsetXMm = (left + right) / 2
           const heightMm = op.height > 0 ? op.height : 2000
-          // §M67: パネル厚 = 壁厚 + 20mm。両面 10mm ずつはみ出すので必ず視認できる。
-          // swingInward に従って中心を ±wallThickness/4 だけずらして「開く向き」のヒントを残す
-          const panelDepthMm = wall.size[2] + 20
-          const offsetZMm = ((op.swingInward !== false) ? -1 : 1) * (wall.size[2] / 4)
           return (
-            <group
+            <DoorPanel
               key={op.id}
-              position={[wall.center[0] * MM_TO_M, 0, wall.center[2] * MM_TO_M]}
-              rotation={[0, wall.rotationY, 0]}
-            >
-              <mesh
-                position={[
-                  offsetXMm * MM_TO_M,
-                  (op.sillHeight + heightMm / 2) * MM_TO_M,
-                  offsetZMm * MM_TO_M,
-                ]}
-                castShadow
-              >
-                <boxGeometry
-                  args={[widthMm * MM_TO_M, heightMm * MM_TO_M, panelDepthMm * MM_TO_M]}
-                />
-                <meshStandardMaterial color="#6e4f33" roughness={0.55} metalness={0.05} />
-              </mesh>
-            </group>
+              wall={wall}
+              leftMm={left}
+              rightMm={right}
+              widthMm={widthMm}
+              heightMm={heightMm}
+              sillHeightMm={op.sillHeight}
+              swingInward={op.swingInward !== false}
+            />
           )
         })}
     </>
   )
+}
+
+/**
+ * §M72 v0.13: ドアパネル単体。クリックで開閉アニメーション、壁を貫通する厚みを持つ。
+ *
+ *  - 厚さ Z = wall.thickness + 20mm、中心 Z = 0 にして壁の両面に 10mm ずつ顔を出す
+ *    (M67 で片側に寄せていた offsetZ を廃止し、user 報告の「壁の片側にだけくっつく」を解消)
+ *  - ヒンジ位置 = ドアの左端 (wall-local) に group origin を置き、子 mesh を +width/2 オフセット
+ *  - swingInward=true → 開いた時 -π/2 (壁の "内側" 想定)、false → +π/2
+ *  - useFrame で目標角度に向けて lerp、滑らかにアニメ
+ */
+function DoorPanel({
+  wall,
+  leftMm,
+  rightMm,
+  widthMm,
+  heightMm,
+  sillHeightMm,
+  swingInward,
+}: {
+  wall: WallBox
+  leftMm: number
+  rightMm: number
+  widthMm: number
+  heightMm: number
+  sillHeightMm: number
+  swingInward: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const groupRef = useRef<THREE.Group>(null)
+  // §M72: 内開きは -π/2、外開きは +π/2 (符号は wall-local Z 軸の向きに合わせている)
+  const targetAngle = open ? (swingInward ? -Math.PI / 2 : Math.PI / 2) : 0
+
+  useFrame((_state, delta) => {
+    const g = groupRef.current
+    if (g == null) return
+    const current = g.rotation.y
+    const diff = targetAngle - current
+    if (Math.abs(diff) < 1e-3) {
+      g.rotation.y = targetAngle
+      return
+    }
+    // 0.18 秒程度で targetAngle に滑らかに収束 (delta は秒)
+    const step = Math.sign(diff) * Math.min(Math.abs(diff), delta * 8)
+    g.rotation.y = current + step
+  })
+
+  const panelDepthMm = wall.size[2] + 20
+  const hingeXMm = leftMm
+  return (
+    <group
+      position={[wall.center[0] * MM_TO_M, 0, wall.center[2] * MM_TO_M]}
+      rotation={[0, wall.rotationY, 0]}
+    >
+      {/* ヒンジ group: ドア左端を pivot に。回転はこの group の rotation.y で行う */}
+      <group
+        ref={groupRef}
+        position={[hingeXMm * MM_TO_M, 0, 0]}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          setOpen((v) => !v)
+        }}
+      >
+        <mesh
+          position={[
+            (widthMm / 2) * MM_TO_M,
+            (sillHeightMm + heightMm / 2) * MM_TO_M,
+            0,
+          ]}
+          castShadow
+        >
+          <boxGeometry
+            args={[widthMm * MM_TO_M, heightMm * MM_TO_M, panelDepthMm * MM_TO_M]}
+          />
+          <meshStandardMaterial color="#6e4f33" roughness={0.55} metalness={0.05} />
+        </mesh>
+        {/* §M72: ノブ。視認性 + クリックヒント */}
+        <mesh
+          position={[
+            (widthMm - 60) * MM_TO_M,
+            (sillHeightMm + heightMm / 2) * MM_TO_M,
+            ((wall.size[2] / 2) + 12) * MM_TO_M,
+          ]}
+        >
+          <sphereGeometry args={[18 * MM_TO_M, 16, 12]} />
+          <meshStandardMaterial color="#cfb37a" roughness={0.35} metalness={0.6} />
+        </mesh>
+      </group>
+    </group>
+  )
+  // rightMm は使っていないが API 一貫性のために受け取る
+  void rightMm
 }
 
 /**
@@ -544,7 +624,16 @@ function WallsWithOpenings({
  *  - 中段に 細い縦バー (柵風) を 100mm 間隔で並べる
  * 色は外装系ダーク (金属感のあるグレー)。
  */
-function Railing({ length, thickness }: { length: number; thickness: number }) {
+function Railing({
+  length,
+  thickness,
+  outsideSign,
+}: {
+  length: number
+  thickness: number
+  /** §M75 v0.13: 部屋の外側を指す local +Z 軸の符号 (-1 or +1) */
+  outsideSign: -1 | 1
+}) {
   const RAIL_HEIGHT = 1000 // mm
   const POST_SIZE = 50 // mm
   const POST_SPACING = 800 // mm
@@ -554,6 +643,8 @@ function Railing({ length, thickness }: { length: number; thickness: number }) {
   const BAR_SPACING = 110
   const halfLen = length / 2
   const depth = Math.max(20, thickness * 0.3)
+  // §M75 v0.13: 部屋境界の外側に貼り付くように local Z 方向に shift する
+  const outsideShiftZ = outsideSign * (thickness / 2 - depth / 2)
   const material = { color: '#5b6b75', roughness: 0.45, metalness: 0.4 }
 
   // 柱: 両端 + 等間隔
@@ -573,7 +664,7 @@ function Railing({ length, thickness }: { length: number; thickness: number }) {
   }
 
   return (
-    <group>
+    <group position={[0, 0, outsideShiftZ * MM_TO_M]}>
       {/* 柱 */}
       {postPositions.map((px, i) => (
         <mesh
@@ -657,13 +748,18 @@ function WallWithOpenings({
 
   // §M70 v0.12: バルコニーの外周は手摺 (柱 + 横棒) として描画する。
   // 通常の solids/glass/lintel/sill は出さず、Railing コンポーネントに任せる。
+  // §M75 v0.13: outsideSign で「部屋の外側」に手摺をシフトする
   if (wall.kind === 'railing' && !wall.hidden) {
     return (
       <group
         position={[wall.center[0] * MM_TO_M, 0, wall.center[2] * MM_TO_M]}
         rotation={[0, wall.rotationY, 0]}
       >
-        <Railing length={wall.size[0]} thickness={wall.size[2]} />
+        <Railing
+          length={wall.size[0]}
+          thickness={wall.size[2]}
+          outsideSign={wall.outsideSign ?? 1}
+        />
       </group>
     )
   }
