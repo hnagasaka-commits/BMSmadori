@@ -606,6 +606,24 @@ function splitWallByOpenings(
     const half = op.width / 2
     const leftEdge = Math.max(cursor, center - half)
     const rightEdge = Math.min(total / 2, center + half)
+
+    // §M56 v0.8: ドアパネルは cursor の進捗に依存させず、壁長クランプだけで判定する。
+    // これにより 2 つ以上の開口が重なっても各 door に必ず 1 枚パネルが立つ
+    if (op.kind === 'door') {
+      const panelLeft = Math.max(-total / 2, center - half)
+      const panelRight = Math.min(total / 2, center + half)
+      const panelWidth = Math.max(0, panelRight - panelLeft)
+      if (panelWidth > 50) {
+        doorPanels.push({
+          offsetX: (panelLeft + panelRight) / 2,
+          y: op.sillHeight,
+          width: panelWidth,
+          height: op.height,
+          swingInward: op.swingInward !== false,
+        })
+      }
+    }
+
     if (leftEdge > cursor) {
       const w = leftEdge - cursor
       solids.push({ offsetX: cursor + w / 2, y: 0, width: w, height: top })
@@ -632,23 +650,13 @@ function splitWallByOpenings(
           height: headHeight,
         })
       }
-      // 窓ガラスは透明箱を 1 枚立てる。
+      // 窓ガラスは透明箱を 1 枚立てる (door panel は上で push 済み)。
       if (op.kind === 'window') {
         glass.push({
           offsetX: opLeft + opWidth / 2,
           y: op.sillHeight,
           width: opWidth,
           height: op.height,
-        })
-      }
-      // §M50 v0.6: ドアパネルを薄板として配置 (常時 1 枚、視認用)
-      if (op.kind === 'door') {
-        doorPanels.push({
-          offsetX: opLeft + opWidth / 2,
-          y: op.sillHeight,
-          width: opWidth,
-          height: op.height,
-          swingInward: op.swingInward !== false,
         })
       }
       cursor = opRight

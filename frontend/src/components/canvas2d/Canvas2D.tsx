@@ -141,7 +141,7 @@ export function Canvas2D() {
     const editor = useEditorStore.getState()
     const oldZoom = editor.zoom
     const oldPan = editor.pan
-    const factor = Math.exp(-e.deltaY * 0.001) // 滑らかな指数カーブ
+    const factor = Math.exp(-e.deltaY * 0.003) // §M58 v0.8: 係数 0.001 → 0.003 で感度約 2.6×
     const rawNext = oldZoom * factor
     // クランプ前後で差分が無い (上下限) なら pan も触らない
     const nextZoom = Math.max(0.02, Math.min(0.5, rawNext))

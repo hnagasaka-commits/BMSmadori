@@ -82,15 +82,19 @@ export function WindowMark({ window: win, wall, scale }: Props) {
         stroke={color}
         strokeWidth={widthPx}
       />
-      {/* ヒット領域 (透明矩形) */}
+      {/* §M57 v0.8: ヒット領域 (透明矩形)。
+          以前は y に `(cy - halfW)` (窓幅の半分) を入れていたため、ヒット領域が窓の中心から
+          数百 mm 上にずれてクリック不能だった。y = cy * scale に修正し、offsetY で中央寄せ。
+          高さも余裕を持って ±100mm (= offsetMm*3.3) に広げて選択しやすく */}
       <Rect
-        x={(cx - halfW) * scale}
-        y={(cy - halfW) * scale}
+        x={cx * scale}
+        y={cy * scale}
         width={win.width * scale}
-        height={Math.max(8, offsetMm * 2 * scale)}
-        offsetY={offsetMm * scale}
+        height={Math.max(16, offsetMm * 3.3 * scale)}
+        offsetX={halfW * scale}
+        offsetY={(offsetMm * 3.3 * scale) / 2}
         rotation={(Math.atan2(uy, ux) * 180) / Math.PI}
-        fill="transparent"
+        fill="rgba(0,0,0,0.001)"
       />
     </Group>
   )
