@@ -48,6 +48,7 @@ export function Canvas2D() {
   const wallById = new Map(walls.map((w) => [w.id, w]))
   const zoom = useEditorStore((s) => s.zoom)
   const pan = useEditorStore((s) => s.pan)
+  const setPan = useEditorStore((s) => s.setPan)
   const gridSize = useEditorStore((s) => s.gridSize)
   const clearSelection = useEditorStore((s) => s.clearSelection)
 
@@ -291,7 +292,9 @@ export function Canvas2D() {
       style={
         tool === 'window' || tool === 'door' || tool === 'draw' || tool === 'wall'
           ? { cursor: 'crosshair' }
-          : undefined
+          : tool === 'select'
+            ? { cursor: 'grab' }
+            : undefined
       }
     >
       <OrientationCompass />
@@ -302,6 +305,23 @@ export function Canvas2D() {
           height={size.h}
           x={pan.x}
           y={pan.y}
+          // §M49 v0.5: select ツール時のみ Stage 自体を draggable に。
+          // 子要素 (Room/Wall/Furniture/Handle) は自身が draggable なので Konva の
+          // 階層 hit-test で子のドラッグが優先される → 既存挙動と非干渉。
+          draggable={tool === 'select'}
+          onDragMove={(e) => {
+            // ドラッグ中は editorStore.pan も同期 (GridLayer の可視域計算に必要)
+            const stage = e.target
+            if (stage === e.target.getStage()) {
+              setPan({ x: stage.x(), y: stage.y() })
+            }
+          }}
+          onDragEnd={(e) => {
+            const stage = e.target
+            if (stage === e.target.getStage()) {
+              setPan({ x: stage.x(), y: stage.y() })
+            }
+          }}
           onMouseDown={handleStageMouseDown}
           onMouseMove={handleStageMouseMove}
           onMouseUp={handleStageMouseUp}

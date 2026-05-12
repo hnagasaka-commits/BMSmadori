@@ -403,7 +403,9 @@ function FloorPlatePolygonMesh({
   return (
     <mesh
       receiveShadow
-      rotation={[-Math.PI / 2, 0, 0]}
+      // §M48 v0.5: ShapeGeometry は XY 平面に作る → +π/2 で寝かせると plan_y がそのまま +Z に
+      // マップされて壁と Z 符号が一致する。-π/2 だと plan_y が -Z に飛んで床と壁の Z が反転する。
+      rotation={[Math.PI / 2, 0, 0]}
       position={[0, 0, 0]}
       geometry={geometry}
     >
