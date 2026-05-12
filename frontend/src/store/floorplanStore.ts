@@ -713,7 +713,10 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const floorIdx = state.activeFloorIndex
     const floor = state.floorplan.floors[floorIdx]
     if (floor == null) return null
-    const wall = floor.walls.find((w) => w.id === input.wallId)
+    // §M53 v0.7: 自立壁 (freestandingWalls) も対象に含める
+    const wall =
+      floor.walls.find((w) => w.id === input.wallId) ??
+      floor.freestandingWalls?.find((w) => w.id === input.wallId)
     if (wall == null) return null
 
     const id = crypto.randomUUID()
@@ -896,7 +899,10 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const state = get()
     const floorIdx = state.activeFloorIndex; const floor = state.floorplan.floors[floorIdx]
     if (floor == null) return null
-    const wall = floor.walls.find((w) => w.id === input.wallId)
+    // §M53 v0.7: 自立壁 (freestandingWalls) も対象に含める
+    const wall =
+      floor.walls.find((w) => w.id === input.wallId) ??
+      floor.freestandingWalls?.find((w) => w.id === input.wallId)
     if (wall == null) return null
 
     const id = crypto.randomUUID()

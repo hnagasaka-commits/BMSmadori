@@ -107,6 +107,8 @@ export function WallLine({ wall, scale }: Props) {
       e.cancelBubble = true
       return
     }
+    // §M54 v0.7: select ツール以外では壁を選択しない (壁ツール/描画ツール時の誤選択を防ぐ)
+    if (tool !== 'select') return
     select({ kind: 'wall', id: wall.id })
     e.cancelBubble = true
   }

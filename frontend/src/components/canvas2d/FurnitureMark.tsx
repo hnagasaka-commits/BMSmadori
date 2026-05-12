@@ -25,7 +25,10 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
   const groupRef = useRef<Konva.Group>(null)
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
+  const tool = useEditorStore((s) => s.tool)
   const moveFurniture = useFloorplanStore((s) => s.moveFurniture)
+  // §M54 v0.7: select ツール以外では家具を選択/ドラッグさせない
+  const interactive = tool === 'select'
 
   const entry = getCatalogEntry(furniture.catalogId)
   if (entry == null) return null
@@ -52,12 +55,15 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
       x={cx * scale}
       y={cy * scale}
       rotation={(furniture.rotation * 180) / Math.PI}
-      draggable
+      draggable={interactive}
+      listening={interactive}
       onClick={(e) => {
+        if (!interactive) return
         select({ kind: 'furniture', id: furniture.id })
         e.cancelBubble = true
       }}
       onTap={(e) => {
+        if (!interactive) return
         select({ kind: 'furniture', id: furniture.id })
         e.cancelBubble = true
       }}

@@ -24,8 +24,10 @@ type Props = {
 export function DoorMark({ door, wall, scale }: Props) {
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
+  const tool = useEditorStore((s) => s.tool)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
   const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
+  const interactive = tool === 'select'
   const isSelected = selected?.kind === 'door' && selected.id === door.id
   // §M32: ドラッグ中の部屋に属する壁のドアは非表示
   if (draggingRoomId != null && wall.sharedBy.includes(draggingRoomId)) return null
@@ -67,6 +69,7 @@ export function DoorMark({ door, wall, scale }: Props) {
   const panelNy = isInward ? ux : -ux
 
   function handleClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
+    if (!interactive) return
     select({ kind: 'door', id: door.id })
     e.cancelBubble = true
   }
@@ -75,7 +78,7 @@ export function DoorMark({ door, wall, scale }: Props) {
   const strokeWidth = isSelected ? 2.5 : 1.5
 
   return (
-    <Group onClick={handleClick} onTap={handleClick}>
+    <Group onClick={handleClick} onTap={handleClick} listening={interactive}>
       {/* 開口線 (壁を切り抜く線。実装上は壁の上に "白で消す" 細い帯ではなく、
           開口位置の上辺に細線を載せて識別) */}
       <Line

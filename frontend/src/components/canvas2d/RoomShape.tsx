@@ -28,6 +28,7 @@ export function RoomShape({ room, scale, gridSize }: Props) {
   const groupRef = useRef<Konva.Group>(null)
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
+  const tool = useEditorStore((s) => s.tool)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
   const setDraggingRoomId = useEditorStore((s) => s.setDraggingRoomId)
   const resizePreview = useEditorStore((s) => s.resizePreview)
@@ -46,11 +47,20 @@ export function RoomShape({ room, scale, gridSize }: Props) {
   const originY = aabb.minY
   const labelText = room.customName ?? room.presetId
 
+  // §M54 v0.7: select ツール以外では room を選択 / ドラッグさせない
+  const interactive = tool === 'select'
+
   function commonHandlers() {
     return {
-      draggable: true,
-      onClick: () => select({ kind: 'room', id: room.id }),
-      onTap: () => select({ kind: 'room', id: room.id }),
+      draggable: interactive,
+      onClick: () => {
+        if (!interactive) return
+        select({ kind: 'room', id: room.id })
+      },
+      onTap: () => {
+        if (!interactive) return
+        select({ kind: 'room', id: room.id })
+      },
       onDragStart: () => {
         // §M32: ドラッグ中はこの部屋の壁/窓/ドアを非表示にして、Group 内の Rect/Line 輪郭線だけが
         // 残るようにする (床と壁が一緒に動いて見える)

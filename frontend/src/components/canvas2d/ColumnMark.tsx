@@ -20,6 +20,8 @@ type Props = {
 export function ColumnMark({ column, scale }: Props) {
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
+  const tool = useEditorStore((s) => s.tool)
+  const interactive = tool === 'select'
   const isSelected = selected?.kind === 'column' && selected.id === column.id
 
   const baseFill = column.loadBearing ? '#7c2d12' : '#171717'
@@ -39,8 +41,9 @@ export function ColumnMark({ column, scale }: Props) {
       fill={baseFill}
       stroke={strokeColor}
       strokeWidth={strokeWidth}
-      onClick={() => select({ kind: 'column', id: column.id })}
-      onTap={() => select({ kind: 'column', id: column.id })}
+      listening={interactive}
+      onClick={() => interactive && select({ kind: 'column', id: column.id })}
+      onTap={() => interactive && select({ kind: 'column', id: column.id })}
     />
   )
 }

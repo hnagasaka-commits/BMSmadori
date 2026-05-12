@@ -176,6 +176,9 @@ export function Canvas2D() {
   const isDraggingDrawRef = useRef(false)
   // §M30: 壁ドラッグ用の状態 (start 点を保持し、move で preview を出す)
   const wallDragStartRef = useRef<readonly [number, number] | null>(null)
+  // §M55 v0.7: 壁ツールのスナップは gridSize (910mm = 半間) では粗いため、専用の細かい
+  // ステップを使う。50mm = メーター/20、半間/18 相当で、自由な長さを刻める
+  const WALL_DRAW_GRID_MM = 50
 
   function stageToWorldMm(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>): readonly [number, number] | null {
     const stage = e.target.getStage()
@@ -201,7 +204,7 @@ export function Canvas2D() {
     if (tool === 'wall') {
       // §M30: 壁ツールはドラッグで 1 本の自立壁を描く
       if (world == null) return
-      wallDragStartRef.current = snapToGridMm(world, gridSize)
+      wallDragStartRef.current = snapToGridMm(world, WALL_DRAW_GRID_MM)
       // プレビューにも記録する (drawing バッファ流用: points = [start, cursor])
       useEditorStore.getState().startDrawing(wallDragStartRef.current)
       return
@@ -220,7 +223,7 @@ export function Canvas2D() {
     if (tool === 'wall' && wallDragStartRef.current != null) {
       // 壁: start から world への線を軸並行化してプレビュー
       const start = wallDragStartRef.current
-      const end = snapToGridMm(axisAlign(start, world), gridSize)
+      const end = snapToGridMm(axisAlign(start, world), WALL_DRAW_GRID_MM)
       // drawing.points = [start, end] でプレビュー
       editor.startDrawing(start)
       editor.addDrawPoint(end)
@@ -383,8 +386,9 @@ export function Canvas2D() {
             ))}
           </Layer>
           <Layer>
-            {/* §M26 リサイズハンドル: 選択中の rect 部屋にだけ表示 */}
-            {selectedRoom != null && (
+            {/* §M26 リサイズハンドル: 選択中の rect 部屋にだけ表示
+                §M54 v0.7: select ツール中のみ表示 (壁/描画ツール時の誤操作を防ぐ) */}
+            {tool === 'select' && selectedRoom != null && (
               <RoomResizeHandles
                 room={selectedRoom}
                 scale={zoom}

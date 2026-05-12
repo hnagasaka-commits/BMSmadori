@@ -17,8 +17,10 @@ type Props = {
 export function WindowMark({ window: win, wall, scale }: Props) {
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
+  const tool = useEditorStore((s) => s.tool)
   const draggingRoomId = useEditorStore((s) => s.draggingRoomId)
   const sharedWallPreview = useEditorStore((s) => s.sharedWallPreview)
+  const interactive = tool === 'select'
   const isSelected = selected?.kind === 'window' && selected.id === win.id
   // §M32: ドラッグ中の部屋に属する壁の窓は非表示
   if (draggingRoomId != null && wall.sharedBy.includes(draggingRoomId)) return null
@@ -59,6 +61,7 @@ export function WindowMark({ window: win, wall, scale }: Props) {
   const rightEnd: [number, number] = [endX - nx * off, endY - ny * off]
 
   function handleClick(e: KonvaEventObject<MouseEvent | TouchEvent>) {
+    if (!interactive) return
     select({ kind: 'window', id: win.id })
     e.cancelBubble = true
   }
@@ -67,7 +70,7 @@ export function WindowMark({ window: win, wall, scale }: Props) {
   const widthPx = isSelected ? 2 : 1
 
   return (
-    <Group onClick={handleClick} onTap={handleClick}>
+    <Group onClick={handleClick} onTap={handleClick} listening={interactive}>
       {/* 二重線 */}
       <Line
         points={[leftStart[0] * scale, leftStart[1] * scale, leftEnd[0] * scale, leftEnd[1] * scale]}
