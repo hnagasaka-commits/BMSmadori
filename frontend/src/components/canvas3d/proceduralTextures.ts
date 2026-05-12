@@ -163,6 +163,87 @@ export function makeSidingTexture(): ColorTexture {
 }
 
 /**
+ * §M86 v0.18: 家具の "木目" テクスチャ。
+ * meshStandardMaterial.map に当てる前提で、ベースは白 + 半透明の暗い縦縞 (木目) と斑点 (節)
+ * → mesh の color と乗算されて木目に見える。
+ */
+export function makeFurnitureWoodTexture(): ColorTexture {
+  return makeCanvasTexture((ctx, size) => {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, size, size)
+    // 縦の木目線 (薄い茶色)
+    ctx.fillStyle = 'rgba(80, 50, 20, 0.18)'
+    for (let g = 0; g < 60; g++) {
+      const x = ((g * 23) % size) + ((g * 7) % 5)
+      ctx.fillRect(x, 0, 1, size)
+    }
+    // 節 (knot): 不規則な小さな楕円
+    ctx.fillStyle = 'rgba(70, 40, 15, 0.32)'
+    for (let i = 0; i < 5; i++) {
+      const x = ((i * 191) % size) + 30
+      const y = ((i * 137 + 70) % size)
+      ctx.beginPath()
+      ctx.ellipse(x, y, 6 + (i % 3), 3 + (i % 2), 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    // 細かいテクスチャ (砂目)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)'
+    for (let i = 0; i < 300; i++) {
+      const x = (i * 41) % size
+      const y = (i * 73 + 13) % size
+      ctx.fillRect(x, y, 1, 1)
+    }
+  }, 128)
+}
+
+/**
+ * §M86 v0.18: 家具の "布" テクスチャ。
+ * 経緯糸風のグリッド + 細かいノイズ。mesh.color と乗算されてファブリックに見える。
+ */
+export function makeFurnitureFabricTexture(): ColorTexture {
+  return makeCanvasTexture((ctx, size) => {
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, size, size)
+    // 経 (vertical) + 緯 (horizontal) の薄い線で織り目
+    ctx.fillStyle = 'rgba(40, 40, 60, 0.20)'
+    const spacing = 4
+    for (let p = 0; p < size; p += spacing) {
+      // 経
+      ctx.fillRect(p, 0, 1, size)
+      // 緯 (1px ずらして織りらしさ)
+      ctx.fillRect(0, p + (p % 8 === 0 ? 1 : 0), size, 1)
+    }
+    // 細かいノイズ
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.12)'
+    for (let i = 0; i < 500; i++) {
+      const x = (i * 37) % size
+      const y = (i * 79 + 17) % size
+      ctx.fillRect(x, y, 1, 1)
+    }
+  }, 128)
+}
+
+/**
+ * §M86 v0.18: 16 進カラー文字列から「暖色系 (= 木目)」「寒色系 (= 布)」の選択ヒントを返す。
+ * 真っ白や中間色 (グレー寄り) は null (テクスチャ未適用) を返す。
+ */
+export function pickFurnitureTextureKind(
+  colorHex: string,
+): 'wood' | 'fabric' | null {
+  const hex = colorHex.replace('#', '')
+  if (hex.length < 6) return null
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
+  // 非常に明るい (白系) は塗装/メラミンとみなしテクスチャ無し
+  if (r > 220 && g > 220 && b > 220) return null
+  // 茶系 (R > G > B かつ R - B > 25) は木目
+  if (r > g && g > b && r - b > 25) return 'wood'
+  // それ以外 (グレー/青/緑) は布
+  return 'fabric'
+}
+
+/**
  * 部屋プリセット ID から床テクスチャを選ぶ。
  * Phase 2 後半 (M15: 規格カタログ UI) で素材選択 UI が入った時点で、
  * Floor.roomFinishes を見るように差し替える。

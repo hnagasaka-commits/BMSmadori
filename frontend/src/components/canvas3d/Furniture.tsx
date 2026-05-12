@@ -9,7 +9,7 @@
  *  - drag 中は OrbitControls を disable (カメラを動かさない)
  *  - 旧バージョンの PivotControls は廃止し、メッシュ本体を直接掴む直感的 UX に変更
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import type { ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -18,6 +18,8 @@ import { furnitureScale3 } from '@/types'
 import { useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
+import { pickFurnitureTextureKind } from './proceduralTextures'
+import { useTextures } from './useTextures'
 import type { FurniturePiece } from './furniturePresets'
 
 const MM_TO_M = 1 / 1000
@@ -194,6 +196,32 @@ function PieceMesh({
     piece.size[1] * MM_TO_M,
     piece.size[2] * MM_TO_M,
   ]
+
+  // §M86 v0.18: リアルテクスチャモード。color hint から木目 / 布を選び、
+  // material.map に当てて色を modulate する (テクスチャは白基調なので color と乗算で
+  // 模様が出る)。piece ごとに texture を clone して repeat を寸法に合わせる。
+  const realistic = useEditorStore((s) => s.realisticFurniture)
+  const textures = useTextures()
+  const textureKind = realistic ? pickFurnitureTextureKind(piece.material.color) : null
+  const sourceTex =
+    textureKind === 'wood'
+      ? textures.furnitureWood
+      : textureKind === 'fabric'
+        ? textures.furnitureFabric
+        : null
+  // piece の大きさに応じて repeat を変える (0.4m で 1 タイル目安)
+  const repeatU = Math.max(0.5, piece.size[0] / 400)
+  const repeatV = Math.max(0.5, Math.max(piece.size[1], piece.size[2]) / 400)
+  const tex = useMemo(() => {
+    if (sourceTex == null) return null
+    const t = sourceTex.clone()
+    t.needsUpdate = true
+    t.wrapS = THREE.RepeatWrapping
+    t.wrapT = THREE.RepeatWrapping
+    t.repeat.set(repeatU, repeatV)
+    return t
+  }, [sourceTex, repeatU, repeatV])
+
   if (piece.shape === 'cylinder') {
     const radius = size[1] / 2
     const length = size[0]
@@ -205,6 +233,7 @@ function PieceMesh({
       >
         <cylinderGeometry args={[radius, radius, length, 16]} />
         <meshStandardMaterial
+          {...(tex != null && { map: tex })}
           color={piece.material.color}
           roughness={piece.material.roughness}
           metalness={piece.material.metalness}
@@ -223,6 +252,7 @@ function PieceMesh({
     >
       <boxGeometry args={size} />
       <meshStandardMaterial
+        {...(tex != null && { map: tex })}
         color={piece.material.color}
         roughness={piece.material.roughness}
         metalness={piece.material.metalness}

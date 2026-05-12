@@ -702,11 +702,17 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     if (floor == null) return
     const hidden = floor.hiddenWallIds ?? []
     if (hidden.includes(wallId)) return
+    // §M85 v0.18: 壁を非表示にする時、その壁に貼り付いているドア/窓も一緒に削除する。
+    // 旧仕様だと壁だけ消えてドアが宙に浮いていた (3D ではパネルだけが残る) ため。
+    const nextDoors = floor.doors.filter((d) => d.wallId !== wallId)
+    const nextWindows = floor.windows.filter((w) => w.wallId !== wallId)
     snapshotForHistory(state.floorplan)
     set({
       floorplan: replaceFloor(state.floorplan, {
         ...floor,
         hiddenWallIds: [...hidden, wallId],
+        doors: nextDoors,
+        windows: nextWindows,
       }, floorIdx),
     })
   },

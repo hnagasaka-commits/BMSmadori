@@ -12,7 +12,7 @@ import type Konva from 'konva'
 import type { Room } from '@/types'
 import { useEditorStore } from '@/store/editorStore'
 import { useFloorplanStore } from '@/store/floorplanStore'
-import { polygonVertices, shapeAabb } from '@/core/geometry'
+import { areaToDisplayUnits, polygonVertices, shapeAabb, shapeArea } from '@/core/geometry'
 import { snapRoomDrop, type AabbMm } from '@/core/snap'
 import { selectRooms } from '@/store/floorplanStore'
 
@@ -120,6 +120,8 @@ export function RoomShape({ room, scale, gridSize }: Props) {
     const w = preview?.w ?? room.shape.w
     const h = preview?.h ?? room.shape.h
     const isResizing = preview != null
+    // §M84 v0.18: 床面積を 畳 / 坪 でラベル表示する
+    const areaUnits = areaToDisplayUnits(w * h)
     return (
       <Group
         ref={groupRef}
@@ -148,6 +150,15 @@ export function RoomShape({ room, scale, gridSize }: Props) {
           listening={false}
           fontFamily="JetBrains Mono, ui-monospace, monospace"
         />
+        <Text
+          text={`${areaUnits.m2.toFixed(2)} ㎡ / ${areaUnits.tatami.toFixed(1)} 畳 / ${areaUnits.tsubo.toFixed(2)} 坪`}
+          fontSize={10}
+          fill="#737373"
+          x={8}
+          y={38}
+          listening={false}
+          fontFamily="JetBrains Mono, ui-monospace, monospace"
+        />
       </Group>
     )
   }
@@ -158,6 +169,8 @@ export function RoomShape({ room, scale, gridSize }: Props) {
   for (const [vx, vy] of verts) {
     flatLocal.push((vx - originX) * scale, (vy - originY) * scale)
   }
+  // §M84 v0.18: polygon でも床面積を表示
+  const polyAreaUnits = areaToDisplayUnits(shapeArea(room.shape))
   return (
     <Group
       ref={groupRef}
@@ -173,6 +186,15 @@ export function RoomShape({ room, scale, gridSize }: Props) {
         strokeWidth={isDragging ? 4 : isSelected ? 2 : 1}
       />
       <Text text={labelText} fontSize={12} fill="#525252" x={8} y={8} listening={false} />
+      <Text
+        text={`${polyAreaUnits.m2.toFixed(2)} ㎡ / ${polyAreaUnits.tatami.toFixed(1)} 畳 / ${polyAreaUnits.tsubo.toFixed(2)} 坪`}
+        fontSize={10}
+        fill="#737373"
+        x={8}
+        y={24}
+        listening={false}
+        fontFamily="JetBrains Mono, ui-monospace, monospace"
+      />
     </Group>
   )
 }

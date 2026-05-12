@@ -1211,6 +1211,8 @@ function LightingSwitcher() {
 function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
   const addHuman = useFloorplanStore((s) => s.addHuman)
   const select = useEditorStore((s) => s.select)
+  const realisticFurniture = useEditorStore((s) => s.realisticFurniture)
+  const setRealisticFurniture = useEditorStore((s) => s.setRealisticFurniture)
   return (
     <div
       data-testid="human-toolbar"
@@ -1224,6 +1226,9 @@ function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
         borderRadius: 6,
         color: 'white',
         fontSize: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
       }}
     >
       <button
@@ -1246,6 +1251,25 @@ function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
       >
         人を置く
       </button>
+      {/* §M86 v0.18: 家具のリアルテクスチャを ON/OFF */}
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          cursor: 'pointer',
+          fontSize: 12,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={realisticFurniture}
+          onChange={(e) => setRealisticFurniture(e.target.checked)}
+          data-testid="realistic-furniture-toggle"
+          aria-label="家具のリアルテクスチャ"
+        />
+        <span>家具リアル</span>
+      </label>
     </div>
   )
 }

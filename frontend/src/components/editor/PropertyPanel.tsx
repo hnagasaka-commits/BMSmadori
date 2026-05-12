@@ -11,6 +11,7 @@ import {
 } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import { ROOM_PRESETS, getPreset } from '@/data/roomPresets'
+import { areaToDisplayUnits, shapeArea } from '@/core/geometry'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
 import { listSashCatalog } from '@/data/sashCatalog'
 import type { WallType, WindowType } from '@/types'
@@ -141,6 +142,8 @@ function RoomProperties({ roomId }: { roomId: string }) {
 
   // rect 部屋のみ寸法表示。polygon は AABB 概算と頂点数だけ表示
   const rect = room.shape.kind === 'rect' ? room.shape : null
+  // §M84 v0.18: 床面積を m² / 畳 / 坪 に正規化 (rect/polygon どちらでも shapeArea で取れる)
+  const areaUnits = areaToDisplayUnits(shapeArea(room.shape))
 
   return (
     <section className="editor-properties" data-testid="property-panel">
@@ -210,10 +213,6 @@ function RoomProperties({ roomId }: { roomId: string }) {
                 aria-label="部屋の奥行 (mm)"
               />
             </div>
-            <div className="property-row">
-              <span className="label">面積 (㎡)</span>
-              <span className="value">{((rect.w * rect.h) / 1_000_000).toFixed(2)}</span>
-            </div>
           </div>
         </>
       )}
@@ -230,6 +229,23 @@ function RoomProperties({ roomId }: { roomId: string }) {
           </div>
         </div>
       )}
+
+      {/* §M84 v0.18: 床面積を m² / 畳 / 坪 で表示。rect / polygon どちらでも shapeArea を経由 */}
+      <div className="property-section">
+        <h3>床面積</h3>
+        <div className="property-row">
+          <span className="label">㎡</span>
+          <span className="value">{areaUnits.m2.toFixed(2)}</span>
+        </div>
+        <div className="property-row">
+          <span className="label">畳</span>
+          <span className="value">{areaUnits.tatami.toFixed(2)}</span>
+        </div>
+        <div className="property-row">
+          <span className="label">坪</span>
+          <span className="value">{areaUnits.tsubo.toFixed(2)}</span>
+        </div>
+      </div>
 
       <div className="property-section">
         <h3>回転 (Phase 1: 90° 単位)</h3>

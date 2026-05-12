@@ -256,6 +256,30 @@ export function shapeArea(shape: Shape): number {
   return polygonArea(shape)
 }
 
+/**
+ * §M84 v0.18: 床面積 (mm²) を [m², 畳, 坪] に変換する。
+ *
+ * 1 坪 = 3.3058 m² (= 6 尺 × 6 尺、JIS 公正規格に基づく)
+ * 1 畳 = 0.5 坪 = 1.6529 m² (= 不動産表示の慣行値)
+ *
+ * 戻り値は double のまま (表示側で `.toFixed()` する)。
+ */
+export const TATAMI_M2 = 1.6529
+export const TSUBO_M2 = 3.3058
+
+export function areaToDisplayUnits(areaMm2: number): {
+  m2: number
+  tatami: number
+  tsubo: number
+} {
+  const m2 = areaMm2 / 1_000_000
+  return {
+    m2,
+    tatami: m2 / TATAMI_M2,
+    tsubo: m2 / TSUBO_M2,
+  }
+}
+
 /** shape の AABB 中心 (rotation 適用後)。 */
 export function shapeCenter(shape: Shape, rotation = 0): Point {
   const a = shapeAabb(shape, rotation)
