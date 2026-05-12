@@ -84,6 +84,8 @@ export type Opening = {
    * true の場合 DoorPanelsLayer はパネル描画をスキップする。
    */
   isPropagated?: boolean
+  /** §M95 v0.21: 'sliding' なら 3D は横スライド開閉、それ以外 (single-swing 等) は回転開閉 */
+  doorType?: 'single-swing' | 'sliding' | 'other'
 }
 
 export type SceneSpec = {
@@ -413,6 +415,8 @@ function doorToOpening(d: Door): Opening {
     positionRatio: d.positionRatio,
     // §M50 v0.6: swingInward が未指定なら true (= 既定で内開き) を採用
     swingInward: d.swingInward !== false,
+    // §M95 v0.21: ドアタイプを 3D 描画に伝播 (引き戸はスライド開閉)
+    doorType: d.type === 'sliding' ? 'sliding' : d.type === 'single-swing' ? 'single-swing' : 'other',
   }
 }
 

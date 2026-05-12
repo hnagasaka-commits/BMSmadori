@@ -122,6 +122,8 @@ const FurnitureInstanceSchema = z.object({
       z.tuple([z.number().positive(), z.number().positive(), z.number().positive()]),
     ])
     .optional(),
+  // §M94 v0.21: 床からの Y オフセット (mm)。重なり時に他家具の天面に乗る用途
+  y: z.number().nonnegative().optional(),
 })
 
 const HumanModelSchema = z.object({

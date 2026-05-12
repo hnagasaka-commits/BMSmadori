@@ -156,6 +156,9 @@ export function Canvas3D() {
             </group>
           ))}
 
+          {/* §M97 v0.21: 最上階の天井高に屋根を載せる (style により形状切替) */}
+          <RoofMesh stacked={stacked} totalHeightMm={totalHeightMm} />
+
           <ContactShadows
             position={[target[0], 0.01, target[2]]}
             scale={Math.max(radiusM * 4, 20)}
@@ -599,6 +602,7 @@ function DoorPanelsLayer({ scene }: { scene: SceneSpec }) {
               heightMm={heightMm}
               sillHeightMm={op.sillHeight}
               swingInward={op.swingInward !== false}
+              isSliding={op.doorType === 'sliding'}
             />
           )
         })}
@@ -623,6 +627,7 @@ function DoorPanel({
   heightMm,
   sillHeightMm,
   swingInward,
+  isSliding,
 }: {
   wall: WallBox
   leftMm: number
@@ -631,22 +636,40 @@ function DoorPanel({
   heightMm: number
   sillHeightMm: number
   swingInward: boolean
+  /** §M95 v0.21: 引き戸 (true) は壁長方向にスライドで開閉、false (= 開き戸) は Y 軸回転で開閉 */
+  isSliding: boolean
 }) {
   const [open, setOpen] = useState(false)
   const groupRef = useRef<THREE.Group>(null)
-  // §M72: 内開きは -π/2、外開きは +π/2 (符号は wall-local Z 軸の向きに合わせている)
-  const targetAngle = open ? (swingInward ? -Math.PI / 2 : Math.PI / 2) : 0
+  // §M72: 開き戸は内開き=-π/2、外開き=+π/2
+  // §M95: 引き戸は壁長方向 (X) に widthMm * 0.95 スライド (パネル幅分ほぼ開く)
+  const targetAngle = !isSliding && open ? (swingInward ? -Math.PI / 2 : Math.PI / 2) : 0
+  const targetSlideX = isSliding && open ? widthMm * 0.95 : 0
 
   useFrame((_state, delta) => {
     const g = groupRef.current
     if (g == null) return
+    if (isSliding) {
+      const current = g.position.x
+      const base = leftMm
+      const diff = base + targetSlideX - current
+      if (Math.abs(diff) < 1) {
+        g.position.x = base + targetSlideX
+        return
+      }
+      // スライドは 1m/s 程度で動かす (delta は秒)
+      const step = Math.sign(diff) * Math.min(Math.abs(diff), delta * 1500)
+      g.position.x = current + step
+      g.rotation.y = 0
+      return
+    }
+    // 回転開閉 (旧 M72)
     const current = g.rotation.y
     const diff = targetAngle - current
     if (Math.abs(diff) < 1e-3) {
       g.rotation.y = targetAngle
       return
     }
-    // 0.18 秒程度で targetAngle に滑らかに収束 (delta は秒)
     const step = Math.sign(diff) * Math.min(Math.abs(diff), delta * 8)
     g.rotation.y = current + step
   })
@@ -737,6 +760,150 @@ function WallsWithOpenings({
         />
       ))}
     </>
+  )
+}
+
+/**
+ * §M97 v0.21: 建物全体に被せる屋根 mesh。
+ *
+ * - `style === 'none'`: 何も描画しない
+ * - `style === 'flat'`: 床 AABB に厚さ 200mm の薄い slab を被せる
+ * - `style === 'gable'`: 床 AABB の長辺方向に切妻 (両側傾斜)。pitch ≒ 30°
+ * - `style === 'shed'`: 床 AABB の長辺方向に片流れ。pitch ≒ 15°
+ *
+ * 床 AABB は最上階の scene.center / scene.radius から推定する (= 各 floorPlate の
+ * 包絡 AABB)。屋根の張り出し (eave) は周囲 500mm。
+ */
+function RoofMesh({
+  stacked,
+  totalHeightMm,
+}: {
+  stacked: { floor: import('@/types').Floor; scene: SceneSpec; yOffsetMm: number }[]
+  totalHeightMm: number
+}) {
+  const roofStyle = useEditorStore((s) => s.roofStyle)
+  if (roofStyle === 'none' || stacked.length === 0) return null
+
+  // 最上階の床プレートから AABB を集計 (X, Z 範囲)
+  const top = stacked[stacked.length - 1]!
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+  for (const fp of top.scene.floorPlates) {
+    if (fp.shapeKind === 'rect') {
+      minX = Math.min(minX, fp.center[0] - fp.size[0] / 2)
+      maxX = Math.max(maxX, fp.center[0] + fp.size[0] / 2)
+      minZ = Math.min(minZ, fp.center[2] - fp.size[2] / 2)
+      maxZ = Math.max(maxZ, fp.center[2] + fp.size[2] / 2)
+    } else {
+      for (const [px, pz] of fp.pointsXZ) {
+        if (px < minX) minX = px
+        if (px > maxX) maxX = px
+        if (pz < minZ) minZ = pz
+        if (pz > maxZ) maxZ = pz
+      }
+    }
+  }
+  if (!Number.isFinite(minX)) return null
+  const EAVE = 500
+  minX -= EAVE; maxX += EAVE; minZ -= EAVE; maxZ += EAVE
+  const cx = (minX + maxX) / 2
+  const cz = (minZ + maxZ) / 2
+  const w = (maxX - minX) * MM_TO_M
+  const d = (maxZ - minZ) * MM_TO_M
+  const baseY = totalHeightMm * MM_TO_M
+
+  if (roofStyle === 'flat') {
+    return (
+      <mesh
+        position={[cx * MM_TO_M, baseY + 0.1, cz * MM_TO_M]}
+        receiveShadow
+        castShadow
+      >
+        <boxGeometry args={[w, 0.2, d]} />
+        <meshStandardMaterial color="#4a4a52" roughness={0.7} metalness={0.1} />
+      </mesh>
+    )
+  }
+
+  // 切妻 / 片流れの傾斜辺の向き: X (左右) が D より長ければ X 方向が棟方向
+  const ridgeAlongX = w >= d
+  // pitch (傾斜): gable は急め (≒30°)、shed は緩め (≒15°)
+  const pitchRad = roofStyle === 'gable' ? (30 * Math.PI) / 180 : (15 * Math.PI) / 180
+  const spanForRise = ridgeAlongX ? d : w  // 軒〜棟までの span
+  const rise = (spanForRise / 2) * Math.tan(pitchRad)
+  // shed は span 全長で rise
+  const shedRise = spanForRise * Math.tan(pitchRad)
+  const thickness = 0.18  // 屋根材厚 m
+
+  if (roofStyle === 'shed') {
+    // 平行四辺形を傾けただけのスラブ。Y 軸まわりに棟方向で回転 + Z (or X) 軸で pitch 回転
+    const rotateY = ridgeAlongX ? 0 : Math.PI / 2
+    const rotateOther = ridgeAlongX ? -pitchRad : -pitchRad
+    return (
+      <mesh
+        position={[cx * MM_TO_M, baseY + shedRise / 2, cz * MM_TO_M]}
+        rotation={[rotateOther * (ridgeAlongX ? 1 : 0), rotateY, ridgeAlongX ? 0 : rotateOther]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[w, thickness, d]} />
+        <meshStandardMaterial color="#6b3a2a" roughness={0.7} metalness={0.05} />
+      </mesh>
+    )
+  }
+
+  // gable: 2 枚の傾いた slab を中央で合わせる
+  // 棟方向 ridgeAlongX を考慮して、2 枚の slab を中央線で対称に配置
+  const slabW = ridgeAlongX ? w : Math.hypot(spanForRise / 2, rise)
+  const slabD = ridgeAlongX ? Math.hypot(spanForRise / 2, rise) : d
+  // 各 slab の中心位置 (Y 軸方向) と回転
+  // 簡略化: 2 枚を棟線で接する三角プリズムとして扱う
+  if (ridgeAlongX) {
+    // 棟は X 軸方向。Z 方向に左右に傾斜
+    return (
+      <group position={[cx * MM_TO_M, baseY, cz * MM_TO_M]}>
+        <mesh
+          position={[0, rise / 2, -d / 4]}
+          rotation={[pitchRad, 0, 0]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[slabW, thickness, slabD]} />
+          <meshStandardMaterial color="#6b3a2a" roughness={0.7} metalness={0.05} />
+        </mesh>
+        <mesh
+          position={[0, rise / 2, d / 4]}
+          rotation={[-pitchRad, 0, 0]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[slabW, thickness, slabD]} />
+          <meshStandardMaterial color="#6b3a2a" roughness={0.7} metalness={0.05} />
+        </mesh>
+      </group>
+    )
+  }
+  // 棟は Z 軸方向。X 方向に左右に傾斜
+  return (
+    <group position={[cx * MM_TO_M, baseY, cz * MM_TO_M]}>
+      <mesh
+        position={[-w / 4, rise / 2, 0]}
+        rotation={[0, 0, -pitchRad]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[slabW, thickness, slabD]} />
+        <meshStandardMaterial color="#6b3a2a" roughness={0.7} metalness={0.05} />
+      </mesh>
+      <mesh
+        position={[w / 4, rise / 2, 0]}
+        rotation={[0, 0, pitchRad]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[slabW, thickness, slabD]} />
+        <meshStandardMaterial color="#6b3a2a" roughness={0.7} metalness={0.05} />
+      </mesh>
+    </group>
   )
 }
 
@@ -1211,6 +1378,14 @@ function LightingSwitcher() {
 function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
   const addHuman = useFloorplanStore((s) => s.addHuman)
   const select = useEditorStore((s) => s.select)
+  const roofStyle = useEditorStore((s) => s.roofStyle)
+  const setRoofStyle = useEditorStore((s) => s.setRoofStyle)
+  const roofOptions: Array<{ id: typeof roofStyle; label: string }> = [
+    { id: 'none', label: '無し' },
+    { id: 'flat', label: '陸屋根' },
+    { id: 'gable', label: '切妻' },
+    { id: 'shed', label: '片流れ' },
+  ]
   return (
     <div
       data-testid="human-toolbar"
@@ -1224,6 +1399,9 @@ function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
         borderRadius: 6,
         color: 'white',
         fontSize: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
       }}
     >
       <button
@@ -1246,6 +1424,32 @@ function HumanToolbar({ centerMm }: { centerMm: readonly [number, number] }) {
       >
         人を置く
       </button>
+      {/* §M97 v0.21: 屋根スタイルを 4 択ボタンで切替 */}
+      <div data-testid="roof-toolbar">
+        <div style={{ fontSize: 11, marginBottom: 4, color: 'rgba(255,255,255,0.7)' }}>屋根</div>
+        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          {roofOptions.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setRoofStyle(o.id)}
+              aria-pressed={roofStyle === o.id}
+              data-testid={`roof-${o.id}`}
+              style={{
+                border: 'none',
+                background: roofStyle === o.id ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: 11,
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

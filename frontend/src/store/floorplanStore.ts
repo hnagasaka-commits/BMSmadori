@@ -26,6 +26,7 @@ import type {
   Window,
   WindowType,
 } from '@/types'
+import { furnitureScale3 } from '@/types'
 import { defaultFurnitureForPreset, getCatalogEntry } from '@/data/furnitureCatalog'
 import { getSashEntry } from '@/data/sashCatalog'
 import { getPreset } from '@/data/roomPresets'
@@ -1207,13 +1208,16 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     if (floor == null) return null
     if (getCatalogEntry(input.catalogId) == null) return null
     const id = input.id ?? crypto.randomUUID()
-    const fi: FurnitureInstance = {
+    const draft: FurnitureInstance = {
       id,
       catalogId: input.catalogId,
       position: [Math.round(input.position[0]), Math.round(input.position[1])],
       rotation: input.rotation ?? 0,
       ...(input.scale !== undefined && { scale: input.scale }),
     }
+    // §M94 v0.21: 既存家具と XZ 重なる場合、重なるものの最も高い天面の上に積む
+    const stackY = computeFurnitureStackY(draft, floor.furniture)
+    const fi: FurnitureInstance = stackY > 0 ? { ...draft, y: stackY } : draft
     snapshotForHistory(state.floorplan)
     set({
       floorplan: replaceFloor(state.floorplan, {
@@ -1245,10 +1249,20 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const idx = floor.furniture.findIndex((f) => f.id === furnitureId)
     if (idx < 0) return
     const f = floor.furniture[idx]!
-    const next: FurnitureInstance = {
+    // §M94 v0.21: 移動先で他家具に重なる場合は天面に積む。重ならなければ y=0 にリセット
+    const probe: FurnitureInstance = {
       ...f,
       position: [Math.round(position[0]), Math.round(position[1])],
     }
+    const others = floor.furniture.filter((x) => x.id !== furnitureId)
+    const stackY = computeFurnitureStackY(probe, others)
+    const next: FurnitureInstance = stackY > 0
+      ? { ...probe, y: stackY }
+      : (() => {
+          const { y: _drop, ...rest } = probe
+          void _drop
+          return rest
+        })()
     snapshotForHistory(state.floorplan)
     const nextFurniture = floor.furniture.map((x, i) => (i === idx ? next : x))
     set({
@@ -1586,6 +1600,107 @@ function applyTranslation(room: Room, dx: number, dy: number): Room {
     }
   }
   return room
+}
+
+// ============================================================================
+// §M94 v0.21: 家具のスタッキング判定
+//
+// XZ 平面で他の家具と重なる位置に置いた場合、重なる家具のうち最も高い天面の上に
+// 載せるための Y オフセットを計算する。回転は AABB を回した上で包む簡易判定。
+// ============================================================================
+
+function localFurnitureAabbXZ(entry: ReturnType<typeof getCatalogEntry>): {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+  maxY: number
+} | null {
+  if (entry == null) return null
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, maxY = 0
+  for (const p of entry.pieces) {
+    minX = Math.min(minX, p.position[0] - p.size[0] / 2)
+    maxX = Math.max(maxX, p.position[0] + p.size[0] / 2)
+    minZ = Math.min(minZ, p.position[2] - p.size[2] / 2)
+    maxZ = Math.max(maxZ, p.position[2] + p.size[2] / 2)
+    maxY = Math.max(maxY, p.position[1] + p.size[1] / 2)
+  }
+  if (!Number.isFinite(minX)) return null
+  return { minX, maxX, minZ, maxZ, maxY }
+}
+
+function worldFurnitureAabbXZ(fi: FurnitureInstance): {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+} | null {
+  const entry = getCatalogEntry(fi.catalogId)
+  const local = localFurnitureAabbXZ(entry)
+  if (local == null) return null
+  const sc3 = furnitureScale3(fi.scale)
+  // ローカル AABB を XZ にスケール → 4 隅を回転して新 AABB に包む
+  const sMinX = local.minX * sc3[0]
+  const sMaxX = local.maxX * sc3[0]
+  const sMinZ = local.minZ * sc3[2]
+  const sMaxZ = local.maxZ * sc3[2]
+  const corners: Array<readonly [number, number]> = [
+    [sMinX, sMinZ],
+    [sMaxX, sMinZ],
+    [sMaxX, sMaxZ],
+    [sMinX, sMaxZ],
+  ]
+  const cos = Math.cos(fi.rotation)
+  const sin = Math.sin(fi.rotation)
+  let wMinX = Infinity, wMaxX = -Infinity, wMinZ = Infinity, wMaxZ = -Infinity
+  for (const [lx, lz] of corners) {
+    const rx = cos * lx - sin * lz
+    const rz = sin * lx + cos * lz
+    if (rx < wMinX) wMinX = rx
+    if (rx > wMaxX) wMaxX = rx
+    if (rz < wMinZ) wMinZ = rz
+    if (rz > wMaxZ) wMaxZ = rz
+  }
+  return {
+    minX: fi.position[0] + wMinX,
+    maxX: fi.position[0] + wMaxX,
+    minZ: fi.position[1] + wMinZ,
+    maxZ: fi.position[1] + wMaxZ,
+  }
+}
+
+function furnitureTopY(fi: FurnitureInstance): number {
+  const entry = getCatalogEntry(fi.catalogId)
+  const local = localFurnitureAabbXZ(entry)
+  if (local == null) return 0
+  const sc3 = furnitureScale3(fi.scale)
+  return (fi.y ?? 0) + local.maxY * sc3[1]
+}
+
+function aabbXZOverlap(
+  a: { minX: number; maxX: number; minZ: number; maxZ: number },
+  b: { minX: number; maxX: number; minZ: number; maxZ: number },
+): boolean {
+  // 接するだけは重なりと見なさない (1mm 余裕)
+  return a.minX + 1 < b.maxX && a.maxX > b.minX + 1 && a.minZ + 1 < b.maxZ && a.maxZ > b.minZ + 1
+}
+
+function computeFurnitureStackY(
+  target: FurnitureInstance,
+  others: readonly FurnitureInstance[],
+): number {
+  const targetAabb = worldFurnitureAabbXZ(target)
+  if (targetAabb == null) return 0
+  let maxTop = 0
+  for (const other of others) {
+    if (other.id === target.id) continue
+    const otherAabb = worldFurnitureAabbXZ(other)
+    if (otherAabb == null) continue
+    if (!aabbXZOverlap(targetAabb, otherAabb)) continue
+    const top = furnitureTopY(other)
+    if (top > maxTop) maxTop = top
+  }
+  return maxTop
 }
 
 // ============================================================================

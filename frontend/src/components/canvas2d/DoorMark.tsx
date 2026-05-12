@@ -85,6 +85,10 @@ export function DoorMark({ door, wall, scale }: Props) {
   const stroke = isSelected ? '#3b82f6' : '#525252'
   const strokeWidth = isSelected ? 2.5 : 1.5
 
+  // §M95 v0.21: 引き戸 (door.type === 'sliding') は開口線 + 壁に沿った 2 本の
+  // 平行線パネルで描画する (弧 + 扉本体は出さない)。建築 2D の引き戸記号に近い表現。
+  const isSliding = door.type === 'sliding'
+
   return (
     <Group onClick={handleClick} onTap={handleClick} listening={interactive}>
       {/* 開口線 (壁を切り抜く線。実装上は壁の上に "白で消す" 細い帯ではなく、
@@ -96,31 +100,84 @@ export function DoorMark({ door, wall, scale }: Props) {
         lineCap="round"
         hitStrokeWidth={12}
       />
-      {/* 開いた扉の弧 (90°)。Konva の Arc は時計回り。
-          壁方向に対して右側に開く想定で 0° → +90° の弧を描く */}
-      <Arc
-        x={arcCenterMm.x * scale}
-        y={arcCenterMm.y * scale}
-        innerRadius={0}
-        outerRadius={door.width * scale}
-        angle={90}
-        rotation={wallAngleDeg}
-        stroke={stroke}
-        strokeWidth={strokeWidth}
-        listening={false}
-      />
-      {/* 扉本体 (90° 開いた状態の直線)。swingInward により法線方向が反転 */}
-      <Line
-        points={[
-          arcCenterMm.x * scale,
-          arcCenterMm.y * scale,
-          (arcCenterMm.x + panelNx * door.width) * scale,
-          (arcCenterMm.y + panelNy * door.width) * scale,
-        ]}
-        stroke={stroke}
-        strokeWidth={strokeWidth}
-        listening={false}
-      />
+      {isSliding ? (
+        <>
+          {/* §M95: 引き戸記号 — 開口部の左右にそれぞれ短い「パネル」線を、
+              法線方向にわずかにオフセットして 2 本の平行線として表す */}
+          {(() => {
+            const halfPanel = (door.width * 0.5) / 2 // パネル 1 枚の長さ
+            const nx = isInward ? -uy : uy
+            const ny = isInward ? ux : -ux
+            const off = 30 // mm 法線方向のオフセット (見やすさ用)
+            // パネル 1: a 〜 中央
+            const p1Start = { x: aMm.x + nx * off, y: aMm.y + ny * off }
+            const p1End = {
+              x: aMm.x + ux * halfPanel * 2 + nx * off,
+              y: aMm.y + uy * halfPanel * 2 + ny * off,
+            }
+            // パネル 2: 中央 〜 b
+            const p2Start = {
+              x: aMm.x + ux * halfPanel * 2 - nx * off,
+              y: aMm.y + uy * halfPanel * 2 - ny * off,
+            }
+            const p2End = { x: bMm.x - nx * off, y: bMm.y - ny * off }
+            return (
+              <>
+                <Line
+                  points={[
+                    p1Start.x * scale,
+                    p1Start.y * scale,
+                    p1End.x * scale,
+                    p1End.y * scale,
+                  ]}
+                  stroke={stroke}
+                  strokeWidth={strokeWidth}
+                  listening={false}
+                />
+                <Line
+                  points={[
+                    p2Start.x * scale,
+                    p2Start.y * scale,
+                    p2End.x * scale,
+                    p2End.y * scale,
+                  ]}
+                  stroke={stroke}
+                  strokeWidth={strokeWidth}
+                  listening={false}
+                />
+              </>
+            )
+          })()}
+        </>
+      ) : (
+        <>
+          {/* 開いた扉の弧 (90°)。Konva の Arc は時計回り。
+              壁方向に対して右側に開く想定で 0° → +90° の弧を描く */}
+          <Arc
+            x={arcCenterMm.x * scale}
+            y={arcCenterMm.y * scale}
+            innerRadius={0}
+            outerRadius={door.width * scale}
+            angle={90}
+            rotation={wallAngleDeg}
+            stroke={stroke}
+            strokeWidth={strokeWidth}
+            listening={false}
+          />
+          {/* 扉本体 (90° 開いた状態の直線)。swingInward により法線方向が反転 */}
+          <Line
+            points={[
+              arcCenterMm.x * scale,
+              arcCenterMm.y * scale,
+              (arcCenterMm.x + panelNx * door.width) * scale,
+              (arcCenterMm.y + panelNy * door.width) * scale,
+            ]}
+            stroke={stroke}
+            strokeWidth={strokeWidth}
+            listening={false}
+          />
+        </>
+      )}
     </Group>
   )
 }

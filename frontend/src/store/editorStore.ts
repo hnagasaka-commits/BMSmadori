@@ -110,6 +110,14 @@ export type EditorState = {
    * 該当する人モデルの目の高さにカメラを置き、PointerLockControls で見回す。
    */
   fpvHumanId: string | null
+  /**
+   * §M97 v0.21: 3D 上の屋根スタイル。
+   *  - 'none'  : 屋根なし (旧挙動)
+   *  - 'flat'  : 平らな陸屋根
+   *  - 'gable' : 切妻 (両側に傾斜)
+   *  - 'shed'  : 片流れ (片側のみ傾斜)
+   */
+  roofStyle: 'none' | 'flat' | 'gable' | 'shed'
   /** §11 Phase 2 / M17: 太陽時 (0..24)。LightingRig が太陽位置に変換 */
   sunHour: number
   /** §11 Phase 2 / M17: 季節。日の出/日の入り時刻と南中高度を決める */
@@ -151,6 +159,8 @@ export type EditorState = {
   /** §M78 v0.14: 一人称視点モードに入る/抜ける */
   enterFpv: (humanId: string) => void
   exitFpv: () => void
+  /** §M97 v0.21: 屋根スタイルを切替 */
+  setRoofStyle: (style: 'none' | 'flat' | 'gable' | 'shed') => void
   setSunHour: (hour: number) => void
   setSeason: (season: Season) => void
   enterReadonly: (reason: string) => void
@@ -189,6 +199,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   viewMode: '2d',
   lightingPreset: 'noon',
   fpvHumanId: null,
+  roofStyle: 'none',
   sunHour: 12,
   season: 'spring',
   readonly: false,
@@ -226,6 +237,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setLightingPreset: (lightingPreset) => set({ lightingPreset }),
   enterFpv: (humanId) => set({ fpvHumanId: humanId }),
   exitFpv: () => set({ fpvHumanId: null }),
+  setRoofStyle: (roofStyle) => set({ roofStyle }),
   setSunHour: (sunHour) => set({ sunHour: Math.max(0, Math.min(24, sunHour)) }),
   setSeason: (season) => set({ season }),
   enterReadonly: (reason) => set({ readonly: true, readonlyReason: reason }),

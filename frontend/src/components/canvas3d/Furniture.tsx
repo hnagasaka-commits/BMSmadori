@@ -40,6 +40,9 @@ export function Furniture({ furniture }: { furniture: Floor['furniture'] }) {
             id={fi.id}
             pieces={entry.pieces}
             positionMm={fi.position}
+            // §M94 v0.21: 既存家具との重なりを検知して載せた天面高さ (mm)。
+            // 既定 0 (床直置き)。store の addFurniture / moveFurniture で計算済み
+            yMm={fi.y ?? 0}
             rotation={fi.rotation}
             instanceScale3={scale3}
             isSelected={isSelected}
@@ -54,6 +57,7 @@ function FurnitureInstanceMesh({
   id,
   pieces,
   positionMm,
+  yMm,
   rotation,
   instanceScale3,
   isSelected,
@@ -61,6 +65,8 @@ function FurnitureInstanceMesh({
   id: string
   pieces: ReadonlyArray<FurniturePiece>
   positionMm: readonly [number, number]
+  /** §M94 v0.21: 床からの Y オフセット (mm)。0 = 直置き、>0 = 他家具の天面に乗っている */
+  yMm: number
   rotation: number
   /** §M69 v0.12: 家具のインスタンス拡大率 [X, Y, Z] (1 = 等倍) */
   instanceScale3: readonly [number, number, number]
@@ -157,7 +163,7 @@ function FurnitureInstanceMesh({
   return (
     <group
       ref={groupRef}
-      position={[positionMm[0] * MM_TO_M, 0, positionMm[1] * MM_TO_M]}
+      position={[positionMm[0] * MM_TO_M, yMm * MM_TO_M, positionMm[1] * MM_TO_M]}
       rotation={[0, rotation, 0]}
       // §M52 / §M69: スケールはグループ単位で各軸に適用 (子の piece position/size に乗る)
       scale={[instanceScale3[0], instanceScale3[1], instanceScale3[2]]}

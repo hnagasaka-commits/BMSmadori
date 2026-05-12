@@ -396,7 +396,12 @@ function WallProperties({
 // ============================================================================
 
 function WindowProperties({ windowId }: { windowId: string }) {
-  const win = useFloorplanStore((s) => s.floorplan.floors[0]?.windows.find((w) => w.id === windowId))
+  // §M96 v0.21: 旧コードは floors[0] をハードコードしていたため、2F 以上で
+  // 窓を選択しても WindowProperties が「窓が見つかりません」状態になり、
+  // 編集 UI が出なかった。activeFloorIndex を参照するように修正
+  const win = useFloorplanStore((s) =>
+    s.floorplan.floors[s.activeFloorIndex]?.windows.find((w) => w.id === windowId),
+  )
   const updateWindow = useFloorplanStore((s) => s.updateWindow)
   const applyWindowSash = useFloorplanStore((s) => s.applyWindowSash)
   const removeWindow = useFloorplanStore((s) => s.removeWindow)
@@ -540,7 +545,18 @@ function DoorProperties({ doorId }: { doorId: string }) {
         <h3>ドア</h3>
         <div className="property-row">
           <span className="label">種別</span>
-          <span className="value">{door.type}</span>
+          {/* §M95 v0.21: 開き戸 / 引き戸 をドロップダウンで選択 */}
+          <select
+            value={door.type}
+            onChange={(e) =>
+              updateDoor(door.id, { type: e.target.value as 'single-swing' | 'sliding' })
+            }
+            data-testid="door-type-select"
+            aria-label="ドアの種別"
+          >
+            <option value="single-swing">開き戸 (single-swing)</option>
+            <option value="sliding">引き戸 (sliding)</option>
+          </select>
         </div>
         <div className="property-row">
           <span className="label">幅 (mm)</span>

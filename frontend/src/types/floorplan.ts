@@ -148,6 +148,12 @@ export type FurnitureInstance = {
    * 後方互換: 既存データ (number) は X/Y/Z 全てに同じ値を適用する。
    */
   scale?: number | readonly [number, number, number]
+  /**
+   * §M94 v0.21: 床からの高さオフセット (mm)。既定 0 (床直置き)。
+   * XZ 位置で既存家具と重なる場合、重なる家具のうち最も高い「天板」の上に
+   * 新規家具を載せるロジック (addFurniture / moveFurniture) で自動付与される。
+   */
+  y?: number
 }
 
 /**
