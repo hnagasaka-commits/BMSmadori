@@ -10,19 +10,32 @@ import { selectRooms, useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import type { Shape } from '@/types'
 import { SeismicPanel } from './SeismicPanel'
+import { shapeAabb } from '@/core/geometry'
 
+/**
+ * §M46 v0.4: 部屋の右側に空きスペースを探す。
+ * rect だけでなく polygon も AABB ベースで集計する (描画ツールで作った polygon が
+ * floor にあるとき、ボタンで追加した rect が原点と衝突して `overlapsAny` で拒否
+ * される事故を防ぐ)。
+ */
 function findFreePlacement(
   existingRooms: ReturnType<typeof selectRooms>,
   gridSize: number,
 ): { x: number; y: number } {
   if (existingRooms.length === 0) return { x: 0, y: 0 }
   let maxRight = 0
+  let minTop = Infinity
   for (const r of existingRooms) {
-    if (r.shape.kind !== 'rect') continue
-    const right = r.shape.x + r.shape.w
-    if (right > maxRight) maxRight = right
+    const aabb = shapeAabb(r.shape, r.rotation)
+    if (aabb.maxX > maxRight) maxRight = aabb.maxX
+    if (aabb.minY < minTop) minTop = aabb.minY
   }
-  return { x: Math.ceil(maxRight / gridSize) * gridSize, y: 0 }
+  // y は最上端に揃える (見た目を上揃えに) — minTop が無効なら 0
+  const yBase = Number.isFinite(minTop) ? minTop : 0
+  return {
+    x: Math.ceil(maxRight / gridSize) * gridSize,
+    y: Math.ceil(yBase / gridSize) * gridSize,
+  }
 }
 
 export function Sidebar() {

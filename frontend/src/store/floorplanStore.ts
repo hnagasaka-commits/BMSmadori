@@ -1397,7 +1397,21 @@ function applyTranslation(room: Room, dx: number, dy: number): Room {
       },
     }
   }
-  // polygon は Phase 2 で対応
+  if (room.shape.kind === 'polygon') {
+    // §M45 v0.4: polygon 部屋も dx/dy で各頂点を平行移動する。
+    // これがないと Konva の Group drag で床は移動するが store は不変 →
+    // 壁の再生成が起きず「床と壁がずれる」現象に繋がる
+    return {
+      ...room,
+      shape: {
+        ...room.shape,
+        points: room.shape.points.map(
+          ([px, py]) =>
+            [Math.round(px + dx), Math.round(py + dy)] as readonly [number, number],
+        ),
+      },
+    }
+  }
   return room
 }
 

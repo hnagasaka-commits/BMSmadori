@@ -1,16 +1,17 @@
 /**
- * §11 Phase 2 / M14: Floor.furniture から R3F メッシュ群をレンダリング + クリック選択 + ドラッグ移動。
+ * §11 Phase 2 / M14, M42, M47: Floor.furniture を R3F メッシュ群として描画 + クリック選択 +
+ * XZ 平面上の直接ドラッグ移動。
  *
- * - Floor.furniture[i].catalogId → カタログから piece 配列を引き、子メッシュとして描画
- * - mesh の onPointerDown で stopPropagation + editorStore.select({ kind:'furniture', id })
- * - 選択中の家具は drei <PivotControls> でラップして XZ ドラッグ可能にする
- *   → drag 中は OrbitControls を一時的に enabled=false に倒すべきだが、
- *      PivotControls の depthTest=false 表示 + 別個のドラッグハンドラに任せれば衝突は実用上少ない。
- * - リリース時 (PivotControls の onDragEnd) で moveFurniture を呼ぶ → history.push が走る
+ * 仕様 (v0.4 / M47):
+ *  - クリック (pointerdown) で select & ドラッグ開始
+ *  - pointermove: カーソル → XZ 平面 (y=0) のレイキャストで新位置を計算し group.position に反映
+ *  - pointerup: 最終位置を `moveFurniture` でストアに commit
+ *  - drag 中は OrbitControls を disable (カメラを動かさない)
+ *  - 旧バージョンの PivotControls は廃止し、メッシュ本体を直接掴む直感的 UX に変更
  */
-import { useEffect, useMemo, useRef } from 'react'
-import { PivotControls } from '@react-three/drei'
+import { useEffect, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
+import type { ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Floor } from '@/types'
 import { useFloorplanStore } from '@/store/floorplanStore'
@@ -62,29 +63,8 @@ function FurnitureInstanceMesh({
   const select = useEditorStore((s) => s.select)
   const moveFurniture = useFloorplanStore((s) => s.moveFurniture)
   const groupRef = useRef<THREE.Group>(null)
-  // PivotControls から座標を取り出すための作業行列
-  const startMatrix = useMemo(
-    () =>
-      new THREE.Matrix4().compose(
-        new THREE.Vector3(positionMm[0] * MM_TO_M, 0, positionMm[1] * MM_TO_M),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotation, 0)),
-        new THREE.Vector3(1, 1, 1),
-      ),
-    // matrix は最初に PivotControls にセットするだけ。位置/回転変更後は groupRef 側の値を読む。
-    // 依存配列を空にすると再選択時に古い matrix から再開してしまうので id/座標も含める。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [id, positionMm[0], positionMm[1], rotation],
-  )
 
-  const meshes = pieces.map((p) => (
-    <PieceMesh key={p.id} piece={p} highlighted={isSelected} />
-  ))
-
-  // §M42: OrbitControls を一時的に disable して、家具クリックがカメラを動かさないようにする。
-  // 選択中の PivotControls 操作も drei が自動で controls.enabled=false にするが、
-  // 初回クリック (= select) と PivotControls がまだ挟まっていないドラッグの瞬間も同様に守る。
-  // - useThree から得た controls を直接書き換えるのは react-hooks/immutability で警告される。
-  //   three.js の controls は mutation 前提なので、ref に逃して setter 関数経由で操作する。
+  // §M42: OrbitControls を一時的に disable する仕組み (ref 経由)
   const r3fControls = useThree((s) => s.controls)
   const controlsRef = useRef<{ enabled: boolean } | null>(null)
   useEffect(() => {
@@ -97,69 +77,95 @@ function FurnitureInstanceMesh({
     const c = controlsRef.current
     if (c != null) c.enabled = enabled
   }
-  const onClickSelect = (e: { stopPropagation: () => void }) => {
+
+  // §M47: XZ 平面 (y=0) 上の直接ドラッグ
+  // - dragOffset は「クリック時点のカーソル世界座標 - 家具世界座標」(m 単位)
+  // - drag 中はこれで group.position.x/z = cursor - offset を保つ
+  const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
+  const dragOffset = useRef<{ x: number; z: number } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  function projectToXZ(
+    e: ThreeEvent<PointerEvent>,
+    out: THREE.Vector3,
+  ): THREE.Vector3 | null {
+    return e.ray.intersectPlane(dragPlane.current, out)
+  }
+
+  function onPointerDown(e: ThreeEvent<PointerEvent>) {
     e.stopPropagation()
     select({ kind: 'furniture', id })
     setOrbitEnabled(false)
-  }
-  const onReleaseRestoreControls = () => {
-    setOrbitEnabled(true)
+    const hit = projectToXZ(e, new THREE.Vector3())
+    const g = groupRef.current
+    if (hit != null && g != null) {
+      dragOffset.current = {
+        x: hit.x - g.position.x,
+        z: hit.z - g.position.z,
+      }
+      setIsDragging(true)
+      try {
+        ;(e.target as Element & { setPointerCapture: (id: number) => void })
+          .setPointerCapture?.(e.pointerId)
+      } catch {
+        // 一部の環境で target が capture を持たない場合があるので握りつぶす
+      }
+    }
   }
 
-  if (!isSelected) {
-    return (
-      <group
-        position={[positionMm[0] * MM_TO_M, 0, positionMm[1] * MM_TO_M]}
-        rotation={[0, rotation, 0]}
-        onPointerDown={onClickSelect}
-        onPointerUp={onReleaseRestoreControls}
-        onPointerLeave={onReleaseRestoreControls}
-        ref={groupRef}
-      >
-        {meshes}
-      </group>
-    )
+  function onPointerMove(e: ThreeEvent<PointerEvent>) {
+    if (dragOffset.current == null) return
+    const hit = projectToXZ(e, new THREE.Vector3())
+    if (hit == null) return
+    const g = groupRef.current
+    if (g == null) return
+    g.position.x = hit.x - dragOffset.current.x
+    g.position.z = hit.z - dragOffset.current.z
+  }
+
+  function onPointerUp(e: ThreeEvent<PointerEvent>) {
+    if (dragOffset.current == null) {
+      // クリックのみで終わった場合も orbit を戻す
+      setOrbitEnabled(true)
+      return
+    }
+    const g = groupRef.current
+    if (g != null) {
+      const xMm = Math.round(g.position.x * M_TO_MM)
+      const zMm = Math.round(g.position.z * M_TO_MM)
+      if (xMm !== positionMm[0] || zMm !== positionMm[1]) {
+        moveFurniture(id, [xMm, zMm])
+      }
+    }
+    dragOffset.current = null
+    setIsDragging(false)
+    setOrbitEnabled(true)
+    try {
+      ;(e.target as Element & { releasePointerCapture: (id: number) => void })
+        .releasePointerCapture?.(e.pointerId)
+    } catch {
+      // 同上
+    }
   }
 
   return (
-    <PivotControls
-      offset={[0, 0.05, 0]}
-      scale={1.2}
-      anchor={[0, -1, 0]}
-      depthTest={false}
-      lineWidth={2.5}
-      activeAxes={[true, false, true]}
-      disableScaling
-      disableRotations
-      matrix={startMatrix}
-      onDragStart={() => {
-        // §M42: gizmo ドラッグ中も明示的に OrbitControls を抑止
-        setOrbitEnabled(false)
-      }}
-      onDragEnd={() => {
-        const g = groupRef.current
-        if (g != null) {
-          // PivotControls は親 group の matrix を直接書き換える。world position を読み戻す
-          const worldPos = new THREE.Vector3()
-          g.getWorldPosition(worldPos)
-          const xMm = Math.round(worldPos.x * M_TO_MM)
-          const zMm = Math.round(worldPos.z * M_TO_MM)
-          if (xMm !== positionMm[0] || zMm !== positionMm[1]) {
-            moveFurniture(id, [xMm, zMm])
-          }
-        }
-        setOrbitEnabled(true)
-      }}
+    <group
+      ref={groupRef}
+      position={[positionMm[0] * MM_TO_M, 0, positionMm[1] * MM_TO_M]}
+      rotation={[0, rotation, 0]}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
-      <group
-        ref={groupRef}
-        onPointerDown={onClickSelect}
-        onPointerUp={onReleaseRestoreControls}
-        onPointerLeave={onReleaseRestoreControls}
-      >
-        {meshes}
-      </group>
-    </PivotControls>
+      {pieces.map((p) => (
+        <PieceMesh
+          key={p.id}
+          piece={p}
+          highlighted={isSelected || isDragging}
+        />
+      ))}
+    </group>
   )
 }
 
