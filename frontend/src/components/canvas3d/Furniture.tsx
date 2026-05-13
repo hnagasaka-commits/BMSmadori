@@ -1,13 +1,20 @@
 /**
- * §11 Phase 2 / M14, M42, M47: Floor.furniture を R3F メッシュ群として描画 + クリック選択 +
- * XZ 平面上の直接ドラッグ移動。
+ * §11 Phase 2 / M14, M42, M47 → §M122/§M124 v0.29: 家具 / BMS 設備の 3D 描画。
  *
- * 仕様 (v0.4 / M47):
- *  - クリック (pointerdown) で select & ドラッグ開始
- *  - pointermove: カーソル → XZ 平面 (y=0) のレイキャストで新位置を計算し group.position に反映
- *  - pointerup: 最終位置を `moveFurniture` でストアに commit
- *  - drag 中は OrbitControls を disable (カメラを動かさない)
- *  - 旧バージョンの PivotControls は廃止し、メッシュ本体を直接掴む直感的 UX に変更
+ * 入力 `Floor.furniture[i].catalogId` は (a) 既存家具カタログ (sofa, bed, …) または
+ * (b) `public/equipment-master.json` の 137 種設備のいずれかを指す。設備マスター
+ * 由来の場合は piece 配列の代わりに spec から単一メッシュ (Box か Cylinder) を合成する。
+ *
+ * Y 位置 (取り付け面の解釈):
+ *  - 'floor'   : y = 0 (床に置く)。height はそのまま box の Y 寸法
+ *  - 'ceiling' : y = ceilingHeight - height (天井に上端を貼る)
+ *  - 'wall'    : y = 1500 (床から 1500mm の標準取付高)。XY 座標は手動配置
+ *  - 'roof'    : y = ceilingHeight (= 当該フロアの天井上)。屋上機器
+ *  - 'outdoor' : y = 0 (= 地面)。屋外機器は通常 1F の floor.furniture に置く
+ *
+ * 配置面フィルタが OFF の placement は 3D で非表示 (return null)。
+ *
+ * 操作 (M42, M47): クリックで選択 + XZ 平面ドラッグ。drag 中は OrbitControls を停止。
  */
 import { useEffect, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
@@ -18,34 +25,60 @@ import { furnitureScale3 } from '@/types'
 import { useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
+import { useEquipmentMasterStore } from '@/store/equipmentMasterStore'
+import type { EquipmentSpec } from '@/types/equipment'
 import type { FurniturePiece } from './furniturePresets'
 
 const MM_TO_M = 1 / 1000
 const M_TO_MM = 1000
+const WALL_MOUNT_HEIGHT_MM = 1500
 
 export function Furniture({
   furniture,
   ceilingHeightMm,
 }: {
   furniture: Floor['furniture']
-  /** §M118 v0.28: 親フロアの天井高 (mm)。mountTo='ceiling' の家具の Y 位置補正に使う */
   ceilingHeightMm: number
 }) {
   const selected = useEditorStore((s) => s.selected)
   const selectedId = selected?.kind === 'furniture' ? selected.id : null
+  const specs = useEquipmentMasterStore((s) => s.byId)
+  const categoryColors = useEquipmentMasterStore((s) => s.categoryColors)
+  const placementFilter = useEquipmentMasterStore((s) => s.placementFilter)
 
   return (
     <>
       {furniture.map((fi) => {
-        const entry = getCatalogEntry(fi.catalogId)
-        if (entry == null) return null
+        const mountTo = fi.mountTo ?? 'floor'
+        // §M123 v0.29: 配置面フィルタ OFF は 3D 非表示
+        if (placementFilter[mountTo] === false) return null
+
         const isSelected = fi.id === selectedId
         const scale3 = furnitureScale3(fi.scale)
-        // §M118 v0.28: 天井設備の Y 位置補正。
-        //   mountTo='ceiling' の場合、設備のローカル AABB 上端 (= piece.position[1] + size[1]/2 の最大値) を
-        //   ceilingHeight に貼り付ける位置を yMm に渡す。yMm はそのまま group.position.y に乗る。
-        //   既存の y (床積み) は無視する (天井設備は床積みしない)。
-        const mountTo = fi.mountTo ?? 'floor'
+
+        // §M122 v0.29: spec 優先で合成メッシュ、無ければ既存 piece 配列
+        const spec = specs.get(fi.catalogId)
+        if (spec != null) {
+          const yMm = computeMountY(mountTo, spec.height, ceilingHeightMm, fi.y ?? 0)
+          const color = categoryColors[spec.category]?.color ?? '#cccccc'
+          return (
+            <SpecMesh
+              key={fi.id}
+              id={fi.id}
+              spec={spec}
+              positionMm={fi.position}
+              yMm={yMm}
+              rotation={fi.rotation}
+              instanceScale3={scale3}
+              isSelected={isSelected}
+              color={fi.colorOverride ?? color}
+            />
+          )
+        }
+
+        // ---- 既存家具カタログのパス (M14 以来) ----
+        const entry = getCatalogEntry(fi.catalogId)
+        if (entry == null) return null
         let yMm = fi.y ?? 0
         if (mountTo === 'ceiling') {
           let topLocal = 0
@@ -53,9 +86,13 @@ export function Furniture({
             const t = p.position[1] + p.size[1] / 2
             if (t > topLocal) topLocal = t
           }
-          // scale Y を考慮して上端を求める
-          const topScaled = topLocal * scale3[1]
-          yMm = ceilingHeightMm - topScaled
+          yMm = ceilingHeightMm - topLocal * scale3[1]
+        } else if (mountTo === 'wall') {
+          yMm = WALL_MOUNT_HEIGHT_MM
+        } else if (mountTo === 'roof') {
+          yMm = ceilingHeightMm
+        } else if (mountTo === 'outdoor') {
+          yMm = 0
         }
         return (
           <FurnitureInstanceMesh
@@ -67,7 +104,6 @@ export function Furniture({
             rotation={fi.rotation}
             instanceScale3={scale3}
             isSelected={isSelected}
-            // §M107 v0.25: 全パーツの色を上書きするオプション
             colorOverride={fi.colorOverride}
           />
         )
@@ -75,6 +111,171 @@ export function Furniture({
     </>
   )
 }
+
+/**
+ * §M122 v0.29: 設備マスター由来の取り付け面 → ローカル Y (mm)。
+ *
+ * - 'floor'   : 床直置き (= 0)。fi.y が指定されていればその上に積む
+ * - 'ceiling' : ceilingHeight - spec.height (= 設備の上端が天井に貼る)
+ * - 'wall'    : 1500 (= 床から 1500mm の標準取付高)
+ * - 'roof'    : ceilingHeight (= フロアの天井の上、地面相当)
+ * - 'outdoor' : 0 (= 地面。屋外設備は通常 1F のフロアに置かれる前提)
+ */
+function computeMountY(
+  mountTo: 'floor' | 'ceiling' | 'wall' | 'roof' | 'outdoor',
+  specHeight: number,
+  ceilingHeightMm: number,
+  fiY: number,
+): number {
+  switch (mountTo) {
+    case 'floor':
+      return fiY
+    case 'ceiling':
+      return ceilingHeightMm - specHeight
+    case 'wall':
+      return WALL_MOUNT_HEIGHT_MM
+    case 'roof':
+      return ceilingHeightMm
+    case 'outdoor':
+      return 0
+  }
+}
+
+// ============================================================================
+// Spec ベース (equipment master) のメッシュ
+// ============================================================================
+
+function SpecMesh({
+  id,
+  spec,
+  positionMm,
+  yMm,
+  rotation,
+  instanceScale3,
+  isSelected,
+  color,
+}: {
+  id: string
+  spec: EquipmentSpec
+  positionMm: readonly [number, number]
+  yMm: number
+  rotation: number
+  instanceScale3: readonly [number, number, number]
+  isSelected: boolean
+  color: string
+}) {
+  const select = useEditorStore((s) => s.select)
+  const moveFurniture = useFloorplanStore((s) => s.moveFurniture)
+  const groupRef = useRef<THREE.Group>(null)
+  const dragOffset = useRef<{ x: number; z: number } | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
+
+  const r3fControls = useThree((s) => s.controls)
+  const controlsRef = useRef<{ enabled: boolean } | null>(null)
+  useEffect(() => {
+    controlsRef.current =
+      r3fControls != null ? (r3fControls as unknown as { enabled: boolean }) : null
+  }, [r3fControls])
+
+  function setOrbitEnabled(enabled: boolean) {
+    const c = controlsRef.current
+    if (c != null) c.enabled = enabled
+  }
+
+  function onPointerDown(e: ThreeEvent<PointerEvent>) {
+    e.stopPropagation()
+    select({ kind: 'furniture', id })
+    setOrbitEnabled(false)
+    const hit = e.ray.intersectPlane(dragPlane.current, new THREE.Vector3())
+    const g = groupRef.current
+    if (hit != null && g != null) {
+      dragOffset.current = { x: hit.x - g.position.x, z: hit.z - g.position.z }
+      setIsDragging(true)
+    }
+  }
+  function onPointerMove(e: ThreeEvent<PointerEvent>) {
+    if (dragOffset.current == null) return
+    const hit = e.ray.intersectPlane(dragPlane.current, new THREE.Vector3())
+    const g = groupRef.current
+    if (hit == null || g == null) return
+    g.position.x = hit.x - dragOffset.current.x
+    g.position.z = hit.z - dragOffset.current.z
+  }
+  function onPointerUp() {
+    if (dragOffset.current == null) {
+      setOrbitEnabled(true)
+      return
+    }
+    const g = groupRef.current
+    if (g != null) {
+      const xMm = Math.round(g.position.x * M_TO_MM)
+      const zMm = Math.round(g.position.z * M_TO_MM)
+      if (xMm !== positionMm[0] || zMm !== positionMm[1]) {
+        moveFurniture(id, [xMm, zMm])
+      }
+    }
+    dragOffset.current = null
+    setIsDragging(false)
+    setOrbitEnabled(true)
+  }
+
+  // spec.width / depth / height + scale (X, Y, Z)
+  // Y は height、X は width、Z は depth として box / cylinder を立てる
+  const w = spec.width * instanceScale3[0]
+  const h = spec.height * instanceScale3[1]
+  const d = spec.depth * instanceScale3[2]
+  const yCenter = yMm + h / 2
+
+  const highlighted = isSelected || isDragging
+
+  return (
+    <group
+      ref={groupRef}
+      position={[positionMm[0] * MM_TO_M, yCenter * MM_TO_M, positionMm[1] * MM_TO_M]}
+      rotation={[0, rotation, 0]}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      {spec.shape === 'circle' ? (
+        <mesh castShadow receiveShadow>
+          <cylinderGeometry
+            args={[
+              (Math.max(w, d) / 2) * MM_TO_M,
+              (Math.max(w, d) / 2) * MM_TO_M,
+              h * MM_TO_M,
+              24,
+            ]}
+          />
+          <meshStandardMaterial
+            color={color}
+            roughness={0.55}
+            metalness={0.1}
+            emissive={highlighted ? '#3b82f6' : '#000000'}
+            emissiveIntensity={highlighted ? 0.3 : 0}
+          />
+        </mesh>
+      ) : (
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[w * MM_TO_M, h * MM_TO_M, d * MM_TO_M]} />
+          <meshStandardMaterial
+            color={color}
+            roughness={0.55}
+            metalness={0.1}
+            emissive={highlighted ? '#3b82f6' : '#000000'}
+            emissiveIntensity={highlighted ? 0.3 : 0}
+          />
+        </mesh>
+      )}
+    </group>
+  )
+}
+
+// ============================================================================
+// 既存家具カタログのメッシュ (M14 〜 M118)
+// ============================================================================
 
 function FurnitureInstanceMesh({
   id,
@@ -89,20 +290,16 @@ function FurnitureInstanceMesh({
   id: string
   pieces: ReadonlyArray<FurniturePiece>
   positionMm: readonly [number, number]
-  /** §M94 v0.21: 床からの Y オフセット (mm)。0 = 直置き、>0 = 他家具の天面に乗っている */
   yMm: number
   rotation: number
-  /** §M69 v0.12: 家具のインスタンス拡大率 [X, Y, Z] (1 = 等倍) */
   instanceScale3: readonly [number, number, number]
   isSelected: boolean
-  /** §M107 v0.25: undefined ならカタログ色、文字列なら全パーツをその色で上書き */
   colorOverride: string | undefined
 }) {
   const select = useEditorStore((s) => s.select)
   const moveFurniture = useFloorplanStore((s) => s.moveFurniture)
   const groupRef = useRef<THREE.Group>(null)
 
-  // §M42: OrbitControls を一時的に disable する仕組み (ref 経由)
   const r3fControls = useThree((s) => s.controls)
   const controlsRef = useRef<{ enabled: boolean } | null>(null)
   useEffect(() => {
@@ -116,9 +313,6 @@ function FurnitureInstanceMesh({
     if (c != null) c.enabled = enabled
   }
 
-  // §M47: XZ 平面 (y=0) 上の直接ドラッグ
-  // - dragOffset は「クリック時点のカーソル世界座標 - 家具世界座標」(m 単位)
-  // - drag 中はこれで group.position.x/z = cursor - offset を保つ
   const dragPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
   const dragOffset = useRef<{ x: number; z: number } | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -163,7 +357,6 @@ function FurnitureInstanceMesh({
 
   function onPointerUp(e: ThreeEvent<PointerEvent>) {
     if (dragOffset.current == null) {
-      // クリックのみで終わった場合も orbit を戻す
       setOrbitEnabled(true)
       return
     }
@@ -191,7 +384,6 @@ function FurnitureInstanceMesh({
       ref={groupRef}
       position={[positionMm[0] * MM_TO_M, yMm * MM_TO_M, positionMm[1] * MM_TO_M]}
       rotation={[0, rotation, 0]}
-      // §M52 / §M69: スケールはグループ単位で各軸に適用 (子の piece position/size に乗る)
       scale={[instanceScale3[0], instanceScale3[1], instanceScale3[2]]}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -203,7 +395,6 @@ function FurnitureInstanceMesh({
           key={p.id}
           piece={p}
           highlighted={isSelected || isDragging}
-          // §M107 v0.25: 全パーツ共通の色上書き (undefined ならカタログ色)
           colorOverride={colorOverride}
         />
       ))}
@@ -218,7 +409,6 @@ function PieceMesh({
 }: {
   piece: FurniturePiece
   highlighted: boolean
-  /** §M107 v0.25: 上書きカラー (16 進)。undefined ならカタログ色 */
   colorOverride: string | undefined
 }) {
   const pos: [number, number, number] = [
@@ -231,7 +421,6 @@ function PieceMesh({
     piece.size[1] * MM_TO_M,
     piece.size[2] * MM_TO_M,
   ]
-  // §M107 v0.25: override 優先
   const meshColor = colorOverride ?? piece.material.color
 
   if (piece.shape === 'cylinder') {

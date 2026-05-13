@@ -7,7 +7,14 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { extractCeilingHeight, importDxfText, parseDxf } from '@/core/dxf'
+import {
+  exportFloorplanToDxf,
+  extractCeilingHeight,
+  importDxfText,
+  parseDxf,
+} from '@/core/dxf'
+import { createEmptyFloorplan } from '@/store/floorplanStore'
+import type { Floorplan } from '@/types'
 
 /**
  * 最小限の ASCII DXF を組み立てるヘルパー。
@@ -183,5 +190,75 @@ describe('importDxfText', () => {
     const { report } = importDxfText(dxf)
     expect(report.walls).toBe(0)
     expect(report.rooms).toBe(0)
+  })
+})
+
+describe('exportFloorplanToDxf', () => {
+  it('Floorplan を DXF に書き出して再パースすると同じ部屋・天井設備が復元できる', () => {
+    // 1 部屋 + 天井設備 1 + 床設備 1 を持つプランを直接組み立てる
+    const base = createEmptyFloorplan()
+    const floor = base.floors[0]!
+    const plan: Floorplan = {
+      ...base,
+      floors: [
+        {
+          ...floor,
+          ceilingHeight: 2700,
+          rooms: [
+            {
+              id: 'r1',
+              presetId: 'living',
+              customName: 'リビング',
+              shape: {
+                kind: 'rect',
+                x: 0,
+                y: 0,
+                w: 4000,
+                h: 3000,
+                edgeIds: ['e1', 'e2', 'e3', 'e4'],
+              },
+              rotation: 0,
+            },
+          ],
+          furniture: [
+            {
+              id: 'f1',
+              catalogId: 'ceiling-light-led',
+              position: [2000, 1500],
+              rotation: 0,
+              mountTo: 'ceiling',
+            },
+            {
+              id: 'f2',
+              catalogId: 'fire-extinguisher',
+              position: [3500, 500],
+              rotation: 0,
+              mountTo: 'floor',
+            },
+          ],
+        },
+      ],
+    }
+    const dxfText = exportFloorplanToDxf(plan)
+    // 主要レイヤー名が含まれていることを軽く確認
+    expect(dxfText).toContain('ROOM')
+    expect(dxfText).toContain('CEILING')
+    expect(dxfText).toContain('E-LIGHT')
+    expect(dxfText).toContain('F-EXT')
+    expect(dxfText).toContain('CH=2700')
+    // 再パース
+    const { floorplan: round, report } = importDxfText(dxfText, { fileName: 'roundtrip.dxf' })
+    expect(round.floors).toHaveLength(1)
+    const roundFloor = round.floors[0]!
+    expect(roundFloor.rooms).toHaveLength(1)
+    expect(roundFloor.rooms[0]!.customName).toBe('リビング')
+    expect(roundFloor.ceilingHeight).toBe(2700)
+    expect(report.equipmentByCatalog['ceiling-light-led']).toBe(1)
+    expect(report.equipmentByCatalog['fire-extinguisher']).toBe(1)
+    // mountTo が保存される
+    const ceilOnRound = roundFloor.furniture.find((f) => f.catalogId === 'ceiling-light-led')
+    expect(ceilOnRound?.mountTo).toBe('ceiling')
+    const floorOnRound = roundFloor.furniture.find((f) => f.catalogId === 'fire-extinguisher')
+    expect(floorOnRound?.mountTo).toBe('floor')
   })
 })

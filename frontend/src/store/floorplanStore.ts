@@ -28,12 +28,14 @@ import type {
 } from '@/types'
 import { furnitureScale3 } from '@/types'
 import { defaultFurnitureForPreset, getCatalogEntry } from '@/data/furnitureCatalog'
+import { getEquipmentSpec } from './equipmentMasterStore'
 import { getSashEntry } from '@/data/sashCatalog'
 import { getPreset } from '@/data/roomPresets'
 import { CURRENT_SCHEMA_VERSION } from '@/data/migrate'
 import { overlapsAny } from '@/core/collision'
 import { addAutoDoorSuppression } from '@/core/doors'
 import { recomputeFloor } from '@/core/recompute'
+import { snapToNearestWall } from '@/core/wallSnap'
 import { exportFloorplanJson, importFloorplan, type ImportResult } from '@/data/loader'
 import { loadCurrent, saveCurrent } from '@/data/storage'
 import { useHistoryStore } from './historyStore'
@@ -1272,21 +1274,55 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const state = get()
     const floorIdx = state.activeFloorIndex; const floor = state.floorplan.floors[floorIdx]
     if (floor == null) return null
+    // §M122 v0.29: catalogId は (a) 既存家具カタログ または (b) 設備マスター (137 種) のいずれか。
+    // 設備マスター由来の id は entry を作らず spec からだけで FurnitureInstance を構成する。
     const entry = getCatalogEntry(input.catalogId)
-    if (entry == null) return null
+    const spec = entry == null ? getEquipmentSpec(input.catalogId) : undefined
+    if (entry == null && spec == null) return null
+    const mountToDefault =
+      entry?.mountToDefault ?? (spec != null ? spec.placement : undefined)
     const id = input.id ?? crypto.randomUUID()
+
+    // §M135 v0.30: mountTo='wall' の設備は最寄りの壁に自動スナップ。
+    // 壁は派生壁 + freestandingWalls (hidden 除外) を候補にする。
+    // spec があれば spec.depth を、なければ entry.pieces の Z 最大寸を使う。
+    let position: [number, number] = [
+      Math.round(input.position[0]),
+      Math.round(input.position[1]),
+    ]
+    let rotation = input.rotation ?? 0
+    if (mountToDefault === 'wall') {
+      const hidden = new Set(floor.hiddenWallIds ?? [])
+      const walls = [
+        ...floor.walls.filter((w) => !hidden.has(w.id)),
+        ...(floor.freestandingWalls ?? []),
+      ]
+      const depth = spec != null ? spec.depth : approxFurnitureDepth(entry)
+      const snap = snapToNearestWall(position, walls, depth)
+      if (snap != null) {
+        position = [snap.position[0], snap.position[1]]
+        rotation = snap.rotation
+      }
+    }
+
     const draft: FurnitureInstance = {
       id,
       catalogId: input.catalogId,
-      position: [Math.round(input.position[0]), Math.round(input.position[1])],
-      rotation: input.rotation ?? 0,
+      position,
+      rotation,
       ...(input.scale !== undefined && { scale: input.scale }),
-      // §M117 v0.28: 既定の取り付け面をカタログから引き継ぐ (天井設備は 'ceiling')
-      ...(entry.mountToDefault != null && { mountTo: entry.mountToDefault }),
+      // §M117 v0.28 / §M122 v0.29: 既定の取り付け面を catalog / spec から引き継ぐ
+      ...(mountToDefault != null && { mountTo: mountToDefault }),
     }
     // §M94 v0.21: 既存家具と XZ 重なる場合、重なるものの最も高い天面の上に積む。
-    // §M117 v0.28: 天井設備 (mountTo='ceiling') は床積みロジックの対象外
-    const stackY = draft.mountTo === 'ceiling' ? 0 : computeFurnitureStackY(draft, floor.furniture)
+    // §M117 v0.28: 天井設備 / 壁設備 / 屋根 / 屋外はそれぞれ Y 位置が固定なので床積みロジックの対象外
+    const stackY =
+      draft.mountTo === 'ceiling' ||
+      draft.mountTo === 'wall' ||
+      draft.mountTo === 'roof' ||
+      draft.mountTo === 'outdoor'
+        ? 0
+        : computeFurnitureStackY(draft, floor.furniture)
     const fi: FurnitureInstance = stackY > 0 ? { ...draft, y: stackY } : draft
     snapshotForHistory(state.floorplan)
     set({
@@ -1319,13 +1355,42 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const idx = floor.furniture.findIndex((f) => f.id === furnitureId)
     if (idx < 0) return
     const f = floor.furniture[idx]!
+
+    // §M135 v0.30: mountTo='wall' の家具は移動先で最寄り壁に再スナップ。
+    // スナップ後の position + rotation で probe を作る。
+    let nextPos: [number, number] = [Math.round(position[0]), Math.round(position[1])]
+    let nextRot = f.rotation
+    if ((f.mountTo ?? 'floor') === 'wall') {
+      const hidden = new Set(floor.hiddenWallIds ?? [])
+      const walls = [
+        ...floor.walls.filter((w) => !hidden.has(w.id)),
+        ...(floor.freestandingWalls ?? []),
+      ]
+      const spec = getEquipmentSpec(f.catalogId)
+      const entry = spec == null ? getCatalogEntry(f.catalogId) : null
+      const depth = spec != null ? spec.depth : approxFurnitureDepth(entry)
+      const snap = snapToNearestWall(nextPos, walls, depth)
+      if (snap != null) {
+        nextPos = [snap.position[0], snap.position[1]]
+        nextRot = snap.rotation
+      }
+    }
+
     // §M94 v0.21: 移動先で他家具に重なる場合は天面に積む。重ならなければ y=0 にリセット
     const probe: FurnitureInstance = {
       ...f,
-      position: [Math.round(position[0]), Math.round(position[1])],
+      position: nextPos,
+      rotation: nextRot,
     }
     const others = floor.furniture.filter((x) => x.id !== furnitureId)
-    const stackY = computeFurnitureStackY(probe, others)
+    // 壁 / 天井 / 屋根 / 屋外設備は床積みロジック対象外
+    const stackY =
+      probe.mountTo === 'ceiling' ||
+      probe.mountTo === 'wall' ||
+      probe.mountTo === 'roof' ||
+      probe.mountTo === 'outdoor'
+        ? 0
+        : computeFurnitureStackY(probe, others)
     const next: FurnitureInstance = stackY > 0
       ? { ...probe, y: stackY }
       : (() => {
@@ -1779,6 +1844,26 @@ function aabbXZOverlap(
 ): boolean {
   // 接するだけは重なりと見なさない (1mm 余裕)
   return a.minX + 1 < b.maxX && a.maxX > b.minX + 1 && a.minZ + 1 < b.maxZ && a.maxZ > b.minZ + 1
+}
+
+/**
+ * §M135 v0.30: 既存家具カタログ entry の **奥行き** (Z 寸法) 近似値。
+ * spec 由来 (= equipment-master) は spec.depth を直接使う想定で、こちらは catalog
+ * 由来の家具向け。entry が null の場合は安全側で 200mm を返す。
+ */
+function approxFurnitureDepth(
+  entry: ReturnType<typeof getCatalogEntry>,
+): number {
+  if (entry == null) return 200
+  let mn = Infinity
+  let mx = -Infinity
+  for (const p of entry.pieces) {
+    const half = p.size[2] / 2
+    if (p.position[2] - half < mn) mn = p.position[2] - half
+    if (p.position[2] + half > mx) mx = p.position[2] + half
+  }
+  if (!Number.isFinite(mn)) return 200
+  return Math.max(50, mx - mn)
 }
 
 function computeFurnitureStackY(

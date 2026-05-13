@@ -1,20 +1,27 @@
 /**
- * §M25 Phase 3: 家具の 2D 描画 + ドラッグ移動。
+ * §M25 Phase 3 → §M122 v0.29: 家具 / BMS 設備の 2D 描画。
  *
- * - Floor.furniture[i] の position は (x, z) = (mm in plan X, mm in plan Y)。
- *   平面図と 3D で同じ座標を共有しているので、ここでは position[0] = X, position[1] = Y (plan view)。
- * - サイズは catalog の AABB をそのまま使う (rotation=0 を仮定)。
- *   90° 回転は Phase 3 後半 (M27 と並行) で扱う。
- * - クリックで選択 (PropertyPanel 連動)、ドラッグでグリッドスナップして moveFurniture を呼ぶ。
+ * catalogId は (a) 既存家具カタログ (sofa, bed, …) または (b) 設備マスター
+ * (`public/equipment-master.json` の 137 種) のいずれか。
+ * 設備マスター由来の場合は spec.shape / spec.symbol / categoryColors / placementColors を
+ * 使って慣習的なシンボル表記で描く。
+ *
+ * - 形状: spec.shape (rect/square/circle) → Konva.Rect / Konva.Circle
+ * - 塗り = カテゴリ色 / 枠 = 配置面色 / 中央 = symbol テキスト
+ * - 実寸 (width × depth) でレンダリング
+ * - 配置面フィルタ (`equipmentMasterStore.placementFilter`) が OFF の placement は
+ *   opacity 0.3 で半透明化 (= 表示はする、操作はしない)
+ * - layerMode (床/天井) は room/wall 背景の調光用に残し、設備マークは常に描く
  */
 import { useRef } from 'react'
-import { Group, Line, Rect, Text } from 'react-konva'
+import { Circle, Group, Rect, Text } from 'react-konva'
 import type Konva from 'konva'
 import type { FurnitureInstance } from '@/types'
 import { furnitureScale3 } from '@/types'
 import { useEditorStore } from '@/store/editorStore'
 import { useFloorplanStore } from '@/store/floorplanStore'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
+import { useEquipmentMasterStore } from '@/store/equipmentMasterStore'
 
 type Props = {
   furniture: FurnitureInstance
@@ -27,43 +34,62 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
   const tool = useEditorStore((s) => s.tool)
-  const layerMode = useEditorStore((s) => s.layerMode)
   const moveFurniture = useFloorplanStore((s) => s.moveFurniture)
-  // §M54 v0.7: select ツール以外では家具を選択/ドラッグさせない
   const interactive = tool === 'select'
 
-  const entry = getCatalogEntry(furniture.catalogId)
-  if (entry == null) return null
+  // §M122 v0.29: spec 優先 / 既存家具カタログ fallback
+  const spec = useEquipmentMasterStore((s) => s.byId.get(furniture.catalogId))
+  const categoryColors = useEquipmentMasterStore((s) => s.categoryColors)
+  const placementColors = useEquipmentMasterStore((s) => s.placementColors)
+  const placementFilter = useEquipmentMasterStore((s) => s.placementFilter)
+  const entry = spec == null ? getCatalogEntry(furniture.catalogId) : undefined
+  if (spec == null && entry == null) return null
 
-  // §M119 v0.28: レイヤーモードで表示分岐
-  //  - layerMode='floor':   mountTo='floor' のみ表示 (旧挙動)
-  //  - layerMode='ceiling': mountTo='ceiling' のみ表示
   const mountTo = furniture.mountTo ?? 'floor'
-  if (mountTo !== layerMode) return null
+  const visible = placementFilter[mountTo] !== false
+  const opacity = visible ? 1 : 0.3
 
   const isSelected = selected?.kind === 'furniture' && selected.id === furniture.id
-  const isCeilingItem = mountTo === 'ceiling'
-
-  // 家具の代表サイズ = pieces の AABB を XZ 平面に投影
-  const bbox = pieceAabbXZ(entry.pieces)
-  if (bbox == null) return null
-  // §M52 v0.6 / §M69 v0.12: 平面図は XZ 軸のみ反映 (Y は高さなので 2D には出さない)。
-  // 拡大率は tuple (or number) のどちらでも受けるので、furnitureScale3 で正規化する。
   const sc3 = furnitureScale3(furniture.scale)
-  const scX = sc3[0]
-  const scZ = sc3[2]
-  const w = (bbox.maxX - bbox.minX) * scX
-  const h = (bbox.maxZ - bbox.minZ) * scZ
-  const minX = bbox.minX * scX
-  const minZ = bbox.minZ * scZ
-  // ラベル表示用 (3 軸個別を 1 行で読める形式に。等倍なら省略)
+  const cx = furniture.position[0]
+  const cy = furniture.position[1]
+
+  // ---- 描画パラメータの解決 (spec 優先) ----
+  let w: number
+  let h: number
+  let fillColor: string
+  let strokeColor: string
+  let label: string
+  let symbol: string | null = null
+  let isCircle = false
+  if (spec != null) {
+    w = spec.width * sc3[0]
+    h = spec.depth * sc3[2]
+    fillColor = categoryColors[spec.category]?.color ?? '#cccccc'
+    strokeColor = placementColors[spec.placement] ?? '#888'
+    label = spec.name
+    symbol = spec.symbol
+    isCircle = spec.shape === 'circle'
+  } else if (entry != null) {
+    const bbox = pieceAabbXZ(entry.pieces)
+    if (bbox == null) return null
+    w = (bbox.maxX - bbox.minX) * sc3[0]
+    h = (bbox.maxZ - bbox.minZ) * sc3[2]
+    fillColor = mountTo === 'ceiling' ? 'rgba(34,197,94,0.10)' : 'rgba(0,0,0,0.05)'
+    strokeColor = mountTo === 'ceiling' ? '#16a34a' : '#6b7280'
+    label = entry.displayName
+  } else {
+    return null
+  }
+
+  // ラベル + スケール表記
   const scLabel =
     Math.abs(sc3[0] - 1) < 0.01 && Math.abs(sc3[1] - 1) < 0.01 && Math.abs(sc3[2] - 1) < 0.01
       ? ''
       : ` (×${sc3[0].toFixed(2)}/${sc3[1].toFixed(2)}/${sc3[2].toFixed(2)})`
-  // 家具中心 (position) を Group の x/y にして、子の位置はローカル mm でレイアウト
-  const cx = furniture.position[0]
-  const cy = furniture.position[1]
+
+  const halfW = w / 2
+  const halfH = h / 2
 
   return (
     <Group
@@ -71,8 +97,9 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
       x={cx * scale}
       y={cy * scale}
       rotation={(furniture.rotation * 180) / Math.PI}
-      draggable={interactive}
-      listening={interactive}
+      opacity={opacity}
+      draggable={interactive && visible}
+      listening={interactive && visible}
       onClick={(e) => {
         if (!interactive) return
         select({ kind: 'furniture', id: furniture.id })
@@ -85,7 +112,6 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
       }}
       onDragEnd={(e) => {
         const grp = e.target
-        // §M40 v0.3: グリッドスナップを廃止し、1mm 単位で確定 (家具は任意位置に置ける)
         const dropX = Math.round(grp.x() / scale)
         const dropY = Math.round(grp.y() / scale)
         moveFurniture(furniture.id, [dropX, dropY])
@@ -93,71 +119,54 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
         void gridSize
       }}
     >
-      {/* §M119 v0.28: 天井設備は「天井に投影された設備」の慣習に従い、
-          角丸 + 対角クロスハッチ (✕) + 緑系の縁取りで描く。床設備は従来通り。 */}
-      <Rect
-        x={minX * scale}
-        y={minZ * scale}
-        width={w * scale}
-        height={h * scale}
-        cornerRadius={isCeilingItem ? 4 : 0}
-        fill={
-          isSelected
-            ? 'rgba(59,130,246,0.10)'
-            : isCeilingItem
-              ? 'rgba(34,197,94,0.10)'
-              : 'rgba(0,0,0,0.05)'
-        }
-        stroke={isSelected ? '#3b82f6' : isCeilingItem ? '#16a34a' : '#6b7280'}
-        strokeWidth={isSelected ? 2 : 1}
-        dash={isCeilingItem ? [4, 3] : [6, 4]}
-      />
-      {isCeilingItem && (
-        <>
-          {/* 対角クロスハッチ (✕) — 「天井設備」の慣習表記 */}
-          <Line
-            points={[minX * scale, minZ * scale, (minX + w) * scale, (minZ + h) * scale]}
-            stroke={isSelected ? '#3b82f6' : '#16a34a'}
-            strokeWidth={1}
-            listening={false}
-          />
-          <Line
-            points={[(minX + w) * scale, minZ * scale, minX * scale, (minZ + h) * scale]}
-            stroke={isSelected ? '#3b82f6' : '#16a34a'}
-            strokeWidth={1}
-            listening={false}
-          />
-        </>
+      {isCircle ? (
+        <Circle
+          x={0}
+          y={0}
+          radius={(Math.max(w, h) / 2) * scale}
+          fill={fillColor}
+          stroke={isSelected ? '#3b82f6' : strokeColor}
+          strokeWidth={isSelected ? 2.5 : 1.5}
+        />
+      ) : (
+        <Rect
+          x={-halfW * scale}
+          y={-halfH * scale}
+          width={w * scale}
+          height={h * scale}
+          fill={fillColor}
+          stroke={isSelected ? '#3b82f6' : strokeColor}
+          strokeWidth={isSelected ? 2.5 : 1.5}
+        />
       )}
+      {symbol != null && symbol.length > 0 && (
+        <Text
+          text={symbol}
+          x={-halfW * scale}
+          y={-halfH * scale}
+          width={w * scale}
+          height={h * scale}
+          align="center"
+          verticalAlign="middle"
+          fontSize={Math.max(8, Math.min(halfW, halfH) * scale * 0.6)}
+          fontStyle="bold"
+          fill={contrastTextColor(fillColor)}
+          listening={false}
+        />
+      )}
+      {/* 設備名ラベル (枠外の上) */}
       <Text
-        text={entry.displayName + scLabel}
-        fontSize={10}
-        fill={isCeilingItem ? '#166534' : '#525252'}
-        x={minX * scale + 4}
-        y={minZ * scale + 4}
-        listening={false}
-      />
-      {/* 中央の十字 (家具中心) */}
-      <Line
-        points={[-50 * scale, 0, 50 * scale, 0]}
-        stroke={isSelected ? '#3b82f6' : '#9ca3af'}
-        strokeWidth={0.5}
-        listening={false}
-      />
-      <Line
-        points={[0, -50 * scale, 0, 50 * scale]}
-        stroke={isSelected ? '#3b82f6' : '#9ca3af'}
-        strokeWidth={0.5}
+        text={label + scLabel}
+        fontSize={9}
+        fill="#374151"
+        x={-halfW * scale}
+        y={-halfH * scale - 11}
         listening={false}
       />
     </Group>
   )
 }
 
-/**
- * piece の position + size から XZ 平面の AABB を計算する。
- * 3D の Y 軸 (= 上方向) は 2D 表示には不要なので落とす。
- */
 function pieceAabbXZ(
   pieces: ReadonlyArray<{
     position: readonly [number, number, number]
@@ -178,4 +187,15 @@ function pieceAabbXZ(
     maxZ = Math.max(maxZ, pz + sz / 2)
   }
   return { minX, maxX, minZ, maxZ }
+}
+
+function contrastTextColor(hex: string): string {
+  const m = /^#?([0-9a-fA-F]{6})/.exec(hex)
+  if (m == null) return '#111'
+  const v = m[1]!
+  const r = parseInt(v.slice(0, 2), 16)
+  const g = parseInt(v.slice(2, 4), 16)
+  const b = parseInt(v.slice(4, 6), 16)
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000
+  return yiq >= 150 ? '#111' : '#fff'
 }

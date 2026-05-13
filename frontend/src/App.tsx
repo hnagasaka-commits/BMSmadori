@@ -6,11 +6,18 @@
  */
 import './styles/tokens.css'
 import './styles/globals.css'
+import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Editor } from '@/routes/Editor'
 import { Home } from '@/routes/Home'
+import { ensureEquipmentMasterLoaded } from '@/store/equipmentMasterStore'
 
 function App() {
+  // §M122 v0.29: 起動時に 137 種の設備マスター JSON を fetch して store に積む
+  useEffect(() => {
+    void ensureEquipmentMasterLoaded()
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>

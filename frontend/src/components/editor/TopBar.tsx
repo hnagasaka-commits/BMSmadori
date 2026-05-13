@@ -10,6 +10,7 @@ import {
   Box,
   DoorOpen,
   Download,
+  FileCode,
   FileText,
   FolderOpen,
   Image as ImageIcon,
@@ -38,6 +39,7 @@ import { useEditorStore } from '@/store/editorStore'
 import { useComplianceStore, visibleWarnings } from '@/store/complianceStore'
 import { downloadPdf } from '@/core/pdf/buildPdf'
 import { downloadStageAsPng } from '@/core/png/buildPng'
+import { downloadFloorplanAsDxf } from '@/core/dxf'
 import { resolveAuthorForPdf } from '@/data/authorPreference'
 import { TemplatePicker } from './TemplatePicker'
 
@@ -214,6 +216,13 @@ export function TopBar() {
     a.download = `${planName || 'floorplan'}.floorplan.json`
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  // §M121 v0.28: 現在の Floorplan を DXF として書き出す (BMS 現場へ受け渡し)
+  function handleExportDxf() {
+    if (readonly) return
+    const plan = useFloorplanStore.getState().floorplan
+    downloadFloorplanAsDxf(plan, { filename: planName || 'floorplan' })
   }
 
   function handleImportClick() {
@@ -467,6 +476,18 @@ export function TopBar() {
           disabled={readonly}
         >
           <FileText size={14} />
+        </button>
+        {/* §M121 v0.28: DXF エクスポート (BMS 現場へ図面を返す用途) */}
+        <button
+          type="button"
+          className="btn icon"
+          onClick={handleExportDxf}
+          aria-label="DXF として保存"
+          title="DXF として保存"
+          data-testid="export-dxf"
+          disabled={readonly}
+        >
+          <FileCode size={14} />
         </button>
         <button
           type="button"

@@ -177,6 +177,26 @@ export function pickFloorTextureKind(presetId: string): FloorTextureKind {
   if (presetId === 'entrance' || presetId === 'balcony') return 'concrete'
   // §M71 v0.12: 庭は屋外なので芝生テクスチャ
   if (presetId === 'garden') return 'grass'
+  // §M132 v0.30: BMS / 商業向け部屋の既定床材。
+  //  - 機械室 / 電気室 / 倉庫 / 執務室裏 → concrete (土足の汚れに強い、点検通路向き)
+  //  - ロビー / 商業廊下 / 公衆トイレ / 給湯室 → tile (清掃しやすく見栄えする)
+  if (
+    presetId === 'machine-room' ||
+    presetId === 'electric-room' ||
+    presetId === 'storage-warehouse' ||
+    presetId === 'office' ||
+    presetId === 'conference-room'
+  ) {
+    return 'concrete'
+  }
+  if (
+    presetId === 'lobby' ||
+    presetId === 'corridor-bms' ||
+    presetId === 'kitchenette' ||
+    presetId === 'restroom-public'
+  ) {
+    return 'tile'
+  }
   return 'wood'
 }
 

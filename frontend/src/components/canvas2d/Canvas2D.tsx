@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Layer, Stage } from 'react-konva'
 import type Konva from 'konva'
 import { useEditorStore } from '@/store/editorStore'
+import { useEquipmentMasterStore } from '@/store/equipmentMasterStore'
 import {
   selectFloor,
   selectRooms,
@@ -289,6 +290,10 @@ export function Canvas2D() {
   // §M119 v0.28: 2D の表示レイヤー (floor / ceiling)
   const layerMode = useEditorStore((s) => s.layerMode)
   const setLayerMode = useEditorStore((s) => s.setLayerMode)
+  // §M123 v0.29: 配置面フィルタ (5 面)。OFF にした面の設備は 2D 半透明 / 3D 非表示
+  const placementFilter = useEquipmentMasterStore((s) => s.placementFilter)
+  const placementColors = useEquipmentMasterStore((s) => s.placementColors)
+  const setPlacementVisible = useEquipmentMasterStore((s) => s.setPlacementVisible)
 
   return (
     <div
@@ -352,6 +357,56 @@ export function Canvas2D() {
         >
           天井レイヤー
         </button>
+      </div>
+      {/* §M123 v0.29: 配置面フィルタ (5 面)。OFF にすると当該配置面の設備が
+          2D で opacity 0.3 (操作不可)、3D で非表示になる */}
+      <div
+        data-testid="placement-filter"
+        style={{
+          position: 'absolute',
+          left: 12,
+          bottom: 56,
+          background: 'rgba(255,255,255,0.92)',
+          borderRadius: 6,
+          padding: 6,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          fontSize: 11,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+          zIndex: 5,
+        }}
+      >
+        <span style={{ fontSize: 10, color: '#525252', fontWeight: 600 }}>配置面フィルタ</span>
+        {(['ceiling', 'floor', 'wall', 'roof', 'outdoor'] as const).map((p) => {
+          const label = { ceiling: '天井', floor: '床', wall: '壁', roof: '屋上', outdoor: '屋外' }[p]
+          const on = placementFilter[p] !== false
+          return (
+            <label
+              key={p}
+              data-testid={`placement-toggle-${p}`}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+            >
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={(e) => setPlacementVisible(p, e.target.checked)}
+                style={{ accentColor: placementColors[p] }}
+              />
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 2,
+                  background: placementColors[p],
+                  display: 'inline-block',
+                }}
+                aria-hidden="true"
+              />
+              <span style={{ color: on ? '#111' : '#9ca3af' }}>{label}</span>
+            </label>
+          )
+        })}
       </div>
       {size.w > 0 && size.h > 0 && (
         <Stage

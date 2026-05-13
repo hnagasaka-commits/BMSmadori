@@ -121,6 +121,7 @@ export const ROOM_PRESETS: readonly RoomPreset[] = [
     requiresWindow: false,
     requiresPipeSpace: false,
     preferredWallTypes: ['partition', 'exterior'],
+    usageMode: 'both',
   },
   {
     id: 'hallway',
@@ -131,6 +132,7 @@ export const ROOM_PRESETS: readonly RoomPreset[] = [
     requiresWindow: false,
     requiresPipeSpace: false,
     preferredWallTypes: ['partition'],
+    usageMode: 'both',
   },
   {
     id: 'closet',
@@ -184,9 +186,130 @@ export const ROOM_PRESETS: readonly RoomPreset[] = [
     requiresWindow: false,
     requiresPipeSpace: false,
     preferredWallTypes: ['partition'],
+    usageMode: 'both',
+  },
+  // §M131 v0.30: ----------- BMS / 商業向け部屋プリセット ------------
+  // 「ビルメンテナンス用」モード時にのみ Sidebar に出る。
+  // 床はコンクリート / タイル基調 (pickFloorTextureKind で対応)。
+  // ----------------------------------------------------------------
+  {
+    id: 'office',
+    displayName: '執務室',
+    category: 'office',
+    defaultSize: { w: 6000, h: 5000 },
+    defaultWallType: 'partition',
+    requiresWindow: true,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['partition', 'exterior'],
+    minLightingRatio: 1 / 10,
+    usageMode: 'bms',
+  },
+  {
+    id: 'conference-room',
+    displayName: '会議室',
+    category: 'office',
+    defaultSize: { w: 5000, h: 4000 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['partition'],
+    usageMode: 'bms',
+  },
+  {
+    id: 'lobby',
+    displayName: 'ロビー',
+    category: 'common',
+    defaultSize: { w: 6000, h: 6000 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['partition', 'exterior'],
+    usageMode: 'bms',
+  },
+  {
+    id: 'corridor-bms',
+    displayName: '商業廊下',
+    category: 'circulation',
+    defaultSize: { w: 2000, h: 10000 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['partition'],
+    usageMode: 'bms',
+  },
+  {
+    id: 'machine-room',
+    displayName: '機械室',
+    category: 'common',
+    defaultSize: { w: 4000, h: 4000 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: true,
+    utilityRequirements: ['water-supply', 'drainage'],
+    preferredWallTypes: ['partition'],
+    usageMode: 'bms',
+  },
+  {
+    id: 'electric-room',
+    displayName: '電気室',
+    category: 'common',
+    defaultSize: { w: 3000, h: 3000 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['partition'],
+    usageMode: 'bms',
+  },
+  {
+    id: 'storage-warehouse',
+    displayName: '倉庫',
+    category: 'storage',
+    defaultSize: { w: 3000, h: 4000 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: false,
+    preferredWallTypes: ['partition'],
+    usageMode: 'bms',
+  },
+  {
+    id: 'kitchenette',
+    displayName: '給湯室',
+    category: 'wet',
+    defaultSize: { w: 2000, h: 2000 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: true,
+    utilityRequirements: ['water-supply', 'drainage'],
+    preferredWallTypes: ['partition'],
+    usageMode: 'bms',
+  },
+  {
+    id: 'restroom-public',
+    displayName: '公衆トイレ',
+    category: 'wet',
+    defaultSize: { w: 3000, h: 3000 },
+    defaultWallType: 'partition',
+    requiresWindow: false,
+    requiresPipeSpace: true,
+    utilityRequirements: ['water-supply', 'drainage', 'vent'],
+    preferredWallTypes: ['partition'],
+    usageMode: 'bms',
   },
 ]
 
 export function getPreset(id: string): RoomPreset | undefined {
   return ROOM_PRESETS.find((p) => p.id === id)
+}
+
+/**
+ * §M131 v0.30: 用途モードに応じた部屋プリセット一覧。
+ * 'both' は両モードで表示する (= entrance / hallway / stairs)。
+ */
+export function listPresetsByUsage(
+  usageMode: 'residential' | 'bms',
+): readonly RoomPreset[] {
+  return ROOM_PRESETS.filter((p) => {
+    const m = p.usageMode ?? 'residential'
+    return m === usageMode || m === 'both'
+  })
 }

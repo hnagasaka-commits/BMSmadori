@@ -58,8 +58,24 @@ export type TemplateMetadata = {
   recommendedBuildingType?: BuildingType
 }
 
+/**
+ * §M130 v0.30: 用途モード。
+ *  - 'residential' (住宅): 既存の家具カタログ + 住宅向け部屋プリセット (リビング/寝室など)、
+ *    床はフローリングが既定。
+ *  - 'bms' (ビルメンテナンス): 137 種の設備マスター + 商業向け部屋プリセット
+ *    (執務室/ロビー/機械室など)、床はコンクリート/タイルが既定。
+ *
+ * 機能 (描画 / 配置 / 編集 / I/O) は両モードで同じ。Sidebar の表示内容と
+ * `pickFloorTextureKind` の既定だけが切り替わる。
+ *
+ * 未指定は 'residential' 扱い (= v0.29 までの保存データはそのまま読める)。
+ */
+export type UsageMode = 'residential' | 'bms'
+
 export type FloorplanMetadata = {
   name: string
+  /** §M130 v0.30: 住宅 / BMS の用途モード。Sidebar 表示とデフォルト床材を切り替える */
+  usageMode?: UsageMode
   buildingType: BuildingType
   unit: 'mm'
   /** 既定 910mm (尺モジュール)。自由グリッドは 50mm 等 */
@@ -144,14 +160,17 @@ export type Shape =
     }
 
 /**
- * §M117 v0.28: 家具・設備の取り付け面。
+ * §M117 v0.28 → §M122 v0.29: 家具・設備の取り付け面 (5 面)。
  * - 'floor'   (既定): 床に置く。Y 位置は y フィールド (= 床からのオフセット)
  * - 'ceiling': 天井から吊る。Y 位置は floor.ceilingHeight - pieceHeight として計算
+ * - 'wall':    壁面に貼り付ける。Y 位置は床から 1500mm の標準取付高 (sillHeight)
+ * - 'roof':    最上階の天井の **上** に載る (避雷針 / アンテナ / 高置水槽 / 排煙機)
+ * - 'outdoor': 地面 (Y=0) に置く (送水口 / 桝 / 防火水槽 / 消防用水)
  *
- * BMS 用途 (照明 / 検知器 / 空調カセット / 誘導灯 / スピーカー / スプリンクラー) は
- * 'ceiling'、消火器などは 'floor'。
+ * BMS 用途 (137 種設備マスター) はこの 5 面で網羅できる。equipment-master.json の
+ * `placement` フィールドがこの値の正本。
  */
-export type FurnitureMount = 'floor' | 'ceiling'
+export type FurnitureMount = 'floor' | 'ceiling' | 'wall' | 'roof' | 'outdoor'
 
 /** §5.2.1 家具インスタンス (Phase 2 から本格運用、Phase 1 では空配列) */
 export type FurnitureInstance = {
@@ -560,6 +579,14 @@ export type RoomPreset = {
   minLightingRatio?: number
   /** 最小換気比 (居室は 1/20) */
   minVentilationRatio?: number
+  /**
+   * §M131 v0.30: この preset が出てくる用途モード。
+   *  - 'residential' : 住宅モードのみ (living / bedroom / bathroom 等)
+   *  - 'bms'         : BMS モードのみ (office / lobby / machine-room 等)
+   *  - 'both'        : 両方 (entrance / hallway / stairs-start など共通の動線系)
+   * 未指定は 'residential' 扱い (= v0.29 までの既存 preset と互換)。
+   */
+  usageMode?: 'residential' | 'bms' | 'both'
 }
 
 // ============================================================================

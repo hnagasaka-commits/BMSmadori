@@ -9,6 +9,7 @@ export { parseDxf } from './parser'
 export type { DxfEntity, DxfEntities, Vec2 } from './parser'
 export { buildFloorplanFromDxf, extractCeilingHeight } from './buildFloorplan'
 export type { DxfImportReport, BuildFloorplanResult } from './buildFloorplan'
+export { exportFloorplanToDxf, downloadFloorplanAsDxf } from './exporter'
 
 import { parseDxf } from './parser'
 import { buildFloorplanFromDxf, type BuildFloorplanResult } from './buildFloorplan'

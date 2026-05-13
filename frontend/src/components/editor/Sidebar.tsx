@@ -5,7 +5,7 @@
  * という単純戦略にする (重なり判定で拒否されたら横にずらす)。
  */
 import { useMemo, useState } from 'react'
-import { ROOM_PRESETS } from '@/data/roomPresets'
+import { listPresetsByUsage } from '@/data/roomPresets'
 import {
   FURNITURE_CATEGORY_LABELS,
   FURNITURE_CATEGORY_ORDER,
@@ -17,6 +17,7 @@ import { selectRooms, useFloorplanStore } from '@/store/floorplanStore'
 import { useEditorStore } from '@/store/editorStore'
 import type { Shape } from '@/types'
 import { shapeAabb } from '@/core/geometry'
+import { EquipmentMasterPanel } from './EquipmentMasterPanel'
 
 /**
  * §M46 v0.4: 部屋の右側に空きスペースを探す。
@@ -50,6 +51,11 @@ export function Sidebar() {
   const addFurniture = useFloorplanStore((s) => s.addFurniture)
   const convertRoomToLShape = useFloorplanStore((s) => s.convertRoomToLShape)
   const rooms = useFloorplanStore(selectRooms)
+  // §M130 v0.30: 用途モード。未指定は 'residential' (= v0.29 までと互換)
+  const usageMode = useFloorplanStore(
+    (s) => s.floorplan.metadata.usageMode ?? 'residential',
+  )
+  const visiblePresets = useMemo(() => listPresetsByUsage(usageMode), [usageMode])
   const selected = useEditorStore((s) => s.selected)
   const gridSize = useEditorStore((s) => s.gridSize)
   const select = useEditorStore((s) => s.select)
@@ -134,9 +140,25 @@ export function Sidebar() {
   return (
     <aside className="editor-sidebar">
       <div className="sidebar-section">
-        <h2>部屋プリセット</h2>
+        <h2>
+          部屋プリセット
+          <span
+            data-testid="sidebar-usage-chip"
+            style={{
+              marginLeft: 8,
+              padding: '1px 6px',
+              borderRadius: 8,
+              fontSize: 10,
+              fontWeight: 500,
+              background: usageMode === 'bms' ? '#1e293b' : '#0f766e',
+              color: 'white',
+            }}
+          >
+            {usageMode === 'bms' ? 'ビルメンテ' : '住宅'}
+          </span>
+        </h2>
         <div className="preset-list">
-          {ROOM_PRESETS.map((p) => (
+          {visiblePresets.map((p) => (
             <button
               key={p.id}
               type="button"
@@ -179,101 +201,114 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar-section">
-        <h2>家具 (Phase 2)</h2>
-        <div className="preset-list">
-          <button
-            type="button"
-            onClick={() => {
-              const added = autoFurnishAllRooms()
-              if (added === 0) {
-                window.alert(
-                  '追加できる家具がありませんでした (既に配置済み、または部屋寸法が下限未満)',
-                )
-              }
-            }}
-            data-testid="auto-furnish"
-            disabled={readonly || rooms.length === 0}
-            title="各部屋の用途に応じて既定家具を配置 (3D ビューで動かせます)"
-          >
-            <span>部屋に既定家具を入れる</span>
-          </button>
-        </div>
-        {/*
-          §M92 / §M93 v0.20: カテゴリで折り畳まれた家具カタログ + 検索ボックス。
-          検索クエリは displayName / catalogId / カテゴリラベル に対して部分一致。
-        */}
-        <div style={{ marginTop: 12 }}>
-          <input
-            type="search"
-            value={furnitureQuery}
-            onChange={(e) => setFurnitureQuery(e.target.value)}
-            placeholder="家具を検索 (例: ベッド / 革 / 棚)"
-            data-testid="furniture-search"
-            aria-label="家具を検索"
-            disabled={readonly}
-            style={{
-              width: '100%',
-              padding: '6px 8px',
-              fontSize: 12,
-              border: '1px solid var(--gray-300, #d4d4d4)',
-              borderRadius: 4,
-            }}
-          />
-        </div>
-        {groupedFurniture.length === 0 && (
-          <div
-            style={{
-              padding: 8,
-              marginTop: 6,
-              fontSize: 12,
-              color: 'var(--gray-500)',
-            }}
-            data-testid="furniture-empty"
-          >
-            該当する家具がありません
+        <h2>{usageMode === 'bms' ? '点検対象設備' : '家具 (Phase 2)'}</h2>
+        {/* §M134 v0.30: 自動家具配置は住宅モードのみ (BMS には自動配置の正解が無いため) */}
+        {usageMode === 'residential' && (
+          <div className="preset-list">
+            <button
+              type="button"
+              onClick={() => {
+                const added = autoFurnishAllRooms()
+                if (added === 0) {
+                  window.alert(
+                    '追加できる家具がありませんでした (既に配置済み、または部屋寸法が下限未満)',
+                  )
+                }
+              }}
+              data-testid="auto-furnish"
+              disabled={readonly || rooms.length === 0}
+              title="各部屋の用途に応じて既定家具を配置 (3D ビューで動かせます)"
+            >
+              <span>部屋に既定家具を入れる</span>
+            </button>
           </div>
         )}
-        {groupedFurniture.map((group) => (
-          <div
-            key={group.category}
-            data-testid={`furniture-group-${group.category}`}
-            style={{ marginTop: 10 }}
-          >
-            <h3
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: 'var(--gray-600, #525252)',
-                margin: '4px 0',
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-              }}
-            >
-              {group.label}
-              <span style={{ color: 'var(--gray-400)', marginLeft: 6, fontWeight: 400 }}>
-                ({group.entries.length})
-              </span>
-            </h3>
-            <div className="preset-list">
-              {group.entries.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => handleAddFromCatalog(entry.id)}
-                  data-testid={`furniture-${entry.id}`}
-                  disabled={readonly}
-                  title={`カタログから「${entry.displayName}」を 1 つ追加`}
-                >
-                  <span>{entry.displayName}</span>
-                  <span className="preset-size">
-                    {(entry.minRoom.w / 1000).toFixed(1)} × {(entry.minRoom.h / 1000).toFixed(1)}
-                  </span>
-                </button>
-              ))}
+        {/*
+          §M92 / §M93 v0.20: カテゴリで折り畳まれた家具カタログ + 検索ボックス。
+          §M134 v0.30: usageMode='residential' のときだけ表示 (BMS モードでは家具を
+          配置しないので非表示)。
+        */}
+        {usageMode === 'residential' && (
+          <>
+            <div style={{ marginTop: 12 }}>
+              <input
+                type="search"
+                value={furnitureQuery}
+                onChange={(e) => setFurnitureQuery(e.target.value)}
+                placeholder="家具を検索 (例: ベッド / 革 / 棚)"
+                data-testid="furniture-search"
+                aria-label="家具を検索"
+                disabled={readonly}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  fontSize: 12,
+                  border: '1px solid var(--gray-300, #d4d4d4)',
+                  borderRadius: 4,
+                }}
+              />
             </div>
-          </div>
-        ))}
+            {groupedFurniture.length === 0 && (
+              <div
+                style={{
+                  padding: 8,
+                  marginTop: 6,
+                  fontSize: 12,
+                  color: 'var(--gray-500)',
+                }}
+                data-testid="furniture-empty"
+              >
+                該当する家具がありません
+              </div>
+            )}
+            {groupedFurniture.map((group) => (
+              <div
+                key={group.category}
+                data-testid={`furniture-group-${group.category}`}
+                style={{ marginTop: 10 }}
+              >
+                <h3
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: 'var(--gray-600, #525252)',
+                    margin: '4px 0',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {group.label}
+                  <span style={{ color: 'var(--gray-400)', marginLeft: 6, fontWeight: 400 }}>
+                    ({group.entries.length})
+                  </span>
+                </h3>
+                <div className="preset-list">
+                  {group.entries.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => handleAddFromCatalog(entry.id)}
+                      data-testid={`furniture-${entry.id}`}
+                      disabled={readonly}
+                      title={`カタログから「${entry.displayName}」を 1 つ追加`}
+                    >
+                      <span>{entry.displayName}</span>
+                      <span className="preset-size">
+                        {(entry.minRoom.w / 1000).toFixed(1)} ×{' '}
+                        {(entry.minRoom.h / 1000).toFixed(1)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
+
+      {/* §M122 v0.29: 137 種の BMS 設備マスター。
+          §M134 v0.30: usageMode='bms' のときだけ表示 (住宅モードでは非表示)。 */}
+      {usageMode === 'bms' && <EquipmentMasterPanel />}
 
       {/*
         §M87 v0.19: 「構造体・設備 (Phase 1.5)」「耐震診断 (Phase 3)」セクションは

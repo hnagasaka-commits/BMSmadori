@@ -23,7 +23,7 @@ import {
 import { createEmptyFloorplan } from '@/store/floorplanStore'
 import { TEMPLATE_CARDS } from '@/data/templates'
 import { importDxfText, type DxfImportReport } from '@/core/dxf'
-import type { Floorplan } from '@/types'
+import type { Floorplan, UsageMode } from '@/types'
 
 export function Home() {
   const navigate = useNavigate()
@@ -53,9 +53,9 @@ export function Home() {
 
   async function handleCreate(
     source:
-      | { kind: 'blank' }
-      | { kind: 'template'; id: string }
-      | { kind: 'dxf'; plan: Floorplan; fileName: string },
+      | { kind: 'blank'; usageMode: UsageMode }
+      | { kind: 'template'; id: string; usageMode: UsageMode }
+      | { kind: 'dxf'; plan: Floorplan; fileName: string; usageMode: UsageMode },
   ) {
     let plan: Floorplan
     if (source.kind === 'blank') {
@@ -69,17 +69,26 @@ export function Home() {
       plan = source.plan
     }
     const id = crypto.randomUUID()
-    // 新規作成時は metadata.name を初期化
+    // §M130 v0.30: usageMode を metadata に持たせる。BMS モードはビル系の既定
+    // (鉄筋コンクリート / 既存建物) も合わせて当てる。
+    const usageMode = source.usageMode
     plan = {
       ...plan,
       metadata: {
         ...plan.metadata,
         name:
           source.kind === 'blank'
-            ? `新規プラン ${new Date().toLocaleString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+            ? `${usageMode === 'bms' ? 'BMS' : '住宅'} ${new Date().toLocaleString('ja-JP', { month: 'numeric', day: 'numeric' })}`
             : plan.metadata.name,
+        usageMode,
+        ...(usageMode === 'bms' && {
+          buildingType: 'office' as const,
+        }),
         updatedAt: new Date().toISOString(),
       },
+      ...(usageMode === 'bms' && {
+        building: { structureType: 'rc' as const, isExistingBuilding: true },
+      }),
     }
     await savePlan(id, plan)
     setPickerOpen(false)
@@ -215,9 +224,9 @@ export function Home() {
 /**
  * §M23: 新規作成ピッカー。
  * §M115 v0.28: BMS 用途向けに「CAD 図面 (DXF) からアップロード」の選択肢を追加。
- *   - DXF テキストを FileReader で読み込み、importDxfText で Floorplan に変換
- *   - パース成功 → そのまま編集画面へ。レポートは UI トーストではなく editor で表示
- *   - パース失敗 → モーダル内でエラーメッセージを表示しキャンセル可能
+ * §M133 v0.30: 最初に **用途モード (住宅 / BMS)** を選ばせる 2 段階フローに変更。
+ *   選択した usageMode は metadata.usageMode に乗り、Sidebar / 既定床材 / 表示部屋
+ *   プリセットを切り替える。テンプレ / 白紙 / CAD 取込のいずれを選んでも適用される。
  */
 function NewPlanPicker({
   onCancel,
@@ -226,12 +235,14 @@ function NewPlanPicker({
   onCancel: () => void
   onPick: (
     source:
-      | { kind: 'blank' }
-      | { kind: 'template'; id: string }
-      | { kind: 'dxf'; plan: Floorplan; fileName: string },
+      | { kind: 'blank'; usageMode: UsageMode }
+      | { kind: 'template'; id: string; usageMode: UsageMode }
+      | { kind: 'dxf'; plan: Floorplan; fileName: string; usageMode: UsageMode },
   ) => void
 }) {
-  const [mode, setMode] = useState<'choose' | 'template' | 'dxf'>('choose')
+  // §M133 v0.30: 'usage' = モード選択画面 (最初)、それ以降は従来の画面
+  const [mode, setMode] = useState<'usage' | 'choose' | 'template' | 'dxf'>('usage')
+  const [usageMode, setUsageMode] = useState<UsageMode>('residential')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dxfError, setDxfError] = useState<string | null>(null)
   const [dxfReport, setDxfReport] = useState<DxfImportReport | null>(null)
@@ -265,7 +276,7 @@ function NewPlanPicker({
   function confirmDxfImport() {
     const pending = dxfPendingRef.current
     if (pending == null) return
-    onPick({ kind: 'dxf', plan: pending.plan, fileName: pending.fileName })
+    onPick({ kind: 'dxf', plan: pending.plan, fileName: pending.fileName, usageMode })
   }
 
   return (
@@ -298,7 +309,80 @@ function NewPlanPicker({
           overflow: 'auto',
         }}
       >
-        <h2 style={{ margin: '0 0 16px', fontSize: 18 }}>新規間取りを作成</h2>
+        <h2 style={{ margin: '0 0 16px', fontSize: 18 }}>
+          新規間取りを作成
+          {mode !== 'usage' && (
+            <span
+              data-testid="picker-usage-chip"
+              style={{
+                marginLeft: 10,
+                padding: '2px 8px',
+                borderRadius: 10,
+                fontSize: 11,
+                background: usageMode === 'bms' ? '#1e293b' : '#0f766e',
+                color: 'white',
+              }}
+            >
+              {usageMode === 'bms' ? 'ビルメンテナンス用' : '住宅用'}
+            </span>
+          )}
+        </h2>
+
+        {/* §M133 v0.30: 最初のステップ = 用途モード選択 */}
+        {mode === 'usage' && (
+          <div data-testid="new-plan-usage-step">
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--gray-600)' }}>
+              用途を選んでください。配置できる設備・部屋プリセット・デフォルト床材が
+              用途別に切り替わります (機能は両モードで共通)。
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setUsageMode('residential')
+                  setMode('choose')
+                }}
+                data-testid="new-plan-usage-residential"
+                style={{
+                  padding: 20,
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  borderLeft: '4px solid #0f766e',
+                }}
+              >
+                <strong>住宅用</strong>
+                <span style={{ fontSize: 11, color: 'var(--gray-500)', textAlign: 'left' }}>
+                  リビング / 寝室 / 浴室など住宅向け部屋プリセット + 家具カタログ。
+                  既定床材はフローリング。
+                </span>
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setUsageMode('bms')
+                  setMode('choose')
+                }}
+                data-testid="new-plan-usage-bms"
+                style={{
+                  padding: 20,
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                  borderLeft: '4px solid #1e293b',
+                }}
+              >
+                <strong>ビルメンテナンス用</strong>
+                <span style={{ fontSize: 11, color: 'var(--gray-500)', textAlign: 'left' }}>
+                  執務室 / ロビー / 機械室など商業向け部屋プリセット + 137 種設備マスター。
+                  既定床材はコンクリート/タイル。
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {mode === 'choose' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
@@ -317,7 +401,7 @@ function NewPlanPicker({
             <button
               type="button"
               className="btn"
-              onClick={() => onPick({ kind: 'blank' })}
+              onClick={() => onPick({ kind: 'blank', usageMode })}
               data-testid="new-plan-blank"
               style={{ padding: 20, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
             >
@@ -335,7 +419,7 @@ function NewPlanPicker({
             >
               <strong>CAD 図面から作成</strong>
               <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>
-                DXF をアップロードして 2D / 3D 復元 (BMS 用途)
+                DXF をアップロードして 2D / 3D 復元
               </span>
             </button>
           </div>
@@ -349,7 +433,7 @@ function NewPlanPicker({
                   key={t.id}
                   type="button"
                   className="btn"
-                  onClick={() => onPick({ kind: 'template', id: t.id })}
+                  onClick={() => onPick({ kind: 'template', id: t.id, usageMode })}
                   data-testid={`new-plan-template-${t.id}`}
                   style={{ padding: 16, justifyContent: 'space-between' }}
                 >
