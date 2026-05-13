@@ -24,6 +24,7 @@ import type {
 } from '@/types'
 import { CURRENT_SCHEMA_VERSION } from '@/data/migrate'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
+import { useEquipmentMasterStore } from '@/store/equipmentMasterStore'
 import type { DxfEntities, DxfEntity, Vec2 } from './parser'
 
 // ============================================================================
@@ -38,14 +39,36 @@ type LayerRole =
   | { kind: 'ignore' }
 
 /**
- * レイヤー名 (大文字化済み) を役割に分類する。完全一致ではなく substring 判定:
- *  例: `A-WALL`, `WALL-EXTERIOR`, `壁芯` のいずれも wall とみなす
+ * レイヤー名を役割に分類する。
  *
- * 日本語の層名は実務現場で多いので明示的に列挙する。
+ * §M152 v0.35: **設備マスター 144 件の catalogId 直接マッチを最優先**。
+ *   例: layer="E-001" / "S-201" / "K-005" がそのまま equipment-master.json の
+ *   id に対応していれば、その spec を採用 (placement = mountTo)。
+ *   これにより v0.34 の exporter が書き出した DXF を再 import すると、
+ *   設備の種別がそのまま復元できる (round-trip 対応)。
+ *
+ * マッチしなかった場合は従来の substring 判定 (英 layer / 日本語 layer) に
+ * フォールバック。
  */
 function classifyLayer(layerRaw: string): LayerRole {
   const layer = layerRaw.toUpperCase()
   const ja = layerRaw // 日本語比較は原文のまま
+
+  // §M152 v0.35: equipment-master の id 直接マッチ (最優先)
+  // レイヤー名が E-001 / P-101 / A-101 / G-101 / S-001 / K-001 / B-001 など
+  // 144 件の id と一致するかを確認。store が未ロード (loaded=false) でも byId は
+  // 空 Map で動作するので安全。
+  const trimmed = layerRaw.trim()
+  if (/^[EPAGSKB]-\d{3}$/.test(trimmed)) {
+    const spec = useEquipmentMasterStore.getState().byId.get(trimmed)
+    if (spec != null) {
+      return {
+        kind: 'equipment',
+        catalogId: spec.id,
+        mountTo: spec.placement,
+      }
+    }
+  }
 
   // 設備系 (より具体的なものを先にチェック)
   const equipmentMap: Array<{
@@ -396,7 +419,12 @@ export function buildFloorplanFromDxf(
     }
     if (positionRaw == null) continue
     const [x, y] = transform(positionRaw)
-    if (getCatalogEntry(role.catalogId) == null) continue
+    // §M152 v0.35: equipment-master 由来 ID は furnitureCatalog に無いので、
+    // どちらか片方に存在すれば受け入れる
+    const inCatalog = getCatalogEntry(role.catalogId) != null
+    const inEquipMaster =
+      useEquipmentMasterStore.getState().byId.get(role.catalogId) != null
+    if (!inCatalog && !inEquipMaster) continue
     const id = crypto.randomUUID()
     furniture.push({
       id,

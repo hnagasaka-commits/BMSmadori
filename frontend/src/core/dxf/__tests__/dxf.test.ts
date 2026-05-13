@@ -262,6 +262,58 @@ describe('exportFloorplanToDxf', () => {
     expect(floorOnRound?.mountTo).toBe('floor')
   })
 
+  it('§M152 v0.35: layer 名が equipment-master id 形式なら spec の placement を反映', async () => {
+    // ストアに E-001 (天井/照明) を投入
+    const { useEquipmentMasterStore } = await import(
+      '@/store/equipmentMasterStore'
+    )
+    useEquipmentMasterStore.getState().load({
+      metadata: {
+        version: '1.1.0',
+        unit: 'mm',
+        categoryColors: {
+          E: { name: '電気', color: '#FFD700' },
+          P: { name: '給排水', color: '#1E90FF' },
+          A: { name: '空調', color: '#32CD32' },
+          G: { name: 'ガス', color: '#FF8C00' },
+          S: { name: '消火', color: '#E60000' },
+          K: { name: '火災報知', color: '#FF69B4' },
+          B: { name: '防災', color: '#9370DB' },
+        },
+        placementColors: {
+          ceiling: '#5DADE2',
+          floor: '#58D68D',
+          wall: '#F5B041',
+          roof: '#AF7AC5',
+          outdoor: '#85929E',
+        },
+      },
+      equipment: [
+        {
+          id: 'E-001',
+          name: '天井埋込シーリングライト',
+          category: 'E',
+          placement: 'ceiling',
+          shape: 'square',
+          width: 600,
+          depth: 600,
+          height: 100,
+          symbol: '◇',
+        },
+      ],
+    })
+    const dxf = [
+      '0', 'SECTION', '2', 'ENTITIES',
+      '0', 'INSERT', '8', 'E-001', '2', 'LED', '10', '1000', '20', '500',
+      '0', 'ENDSEC', '0', 'EOF',
+    ].join('\n')
+    const { floorplan, report } = importDxfText(dxf)
+    expect(report.equipmentByCatalog['E-001']).toBe(1)
+    const placed = floorplan.floors[0]!.furniture[0]
+    expect(placed?.catalogId).toBe('E-001')
+    expect(placed?.mountTo).toBe('ceiling')
+  })
+
   it('§M149 v0.34: DXF 出力に設備の 2D 図形 (LWPOLYLINE/CIRCLE) + ラベルが含まれる', () => {
     // 円形設備 (ceiling-light-led は square だが既存マッピング)
     const base = createEmptyFloorplan()

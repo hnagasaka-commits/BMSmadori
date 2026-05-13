@@ -466,10 +466,16 @@ export function downloadFloorplanAsDxf(
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  const base = (options.filename ?? floorplan.metadata.name ?? 'floorplan').replace(
-    /[^\w\-.]+/g,
-    '_',
-  )
+  // §M151 v0.35: ファイル名は **編集中の間取り名そのまま**。
+  //   旧仕様は `[^\w\-.]+` 全部を `_` に置換していたため、日本語名 / 括弧 / 空白が
+  //   "_______" に化けていた。本仕様は OS のファイル名禁止文字 ( / \ : * ? " < > | )
+  //   と制御文字だけを `_` に置換し、日本語・括弧・空白などはそのまま残す。
+  const rawName = options.filename ?? floorplan.metadata.name ?? 'floorplan'
+  // §M151 v0.35: OS ファイル名禁止文字 (/ \ : * ? " < > |) のみ "_" に置換。
+  // 日本語 / 括弧 / 空白 / ハイフンなどはそのまま残し、編集中の間取り名がほぼ
+  // そのままファイル名になるようにする。
+  const safeName = rawName.replace(/[/\\:*?"<>|]/g, '_').trim()
+  const base = safeName.length > 0 ? safeName : 'floorplan'
   a.download = `${base}.dxf`
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
