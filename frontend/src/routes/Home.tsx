@@ -21,7 +21,7 @@ import {
   type PlanSummary,
 } from '@/data/storage'
 import { createEmptyFloorplan } from '@/store/floorplanStore'
-import { TEMPLATE_CARDS } from '@/data/templates'
+import { TEMPLATE_CARDS, listTemplatesForUsage } from '@/data/templates'
 import { importDxfText, type DxfImportReport } from '@/core/dxf'
 import type { Floorplan, UsageMode } from '@/types'
 
@@ -427,8 +427,8 @@ function NewPlanPicker({
 
         {mode === 'template' && (
           <div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {TEMPLATE_CARDS.map((t) => (
+            <div style={{ display: 'grid', gap: 8, maxHeight: 480, overflowY: 'auto' }}>
+              {listTemplatesForUsage(usageMode).map((t) => (
                 <button
                   key={t.id}
                   type="button"
@@ -442,10 +442,23 @@ function NewPlanPicker({
                     <br />
                     <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>
                       {t.description}
+                      {t.area > 0 && (
+                        <>
+                          <span style={{ marginLeft: 8 }}>{t.area}㎡</span>
+                        </>
+                      )}
                     </span>
                   </span>
                 </button>
               ))}
+              {listTemplatesForUsage(usageMode).length === 0 && (
+                <div
+                  data-testid="new-plan-template-empty"
+                  style={{ padding: 16, fontSize: 13, color: 'var(--gray-500)' }}
+                >
+                  このモードに利用できるテンプレートがありません
+                </div>
+              )}
             </div>
             <button
               type="button"

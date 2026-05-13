@@ -32,11 +32,12 @@ describe('TC-Q: テンプレ → export → import ラウンドトリップ', ()
     it(`${card.id} は FloorplanSchema を通り、export/import で復元できる`, () => {
       const plan = card.build()
 
-      // §11 不変条件
+      // §11 不変条件 (Phase 3): floors は 1〜3、columns / pipeSpaces は空。
+      // §M136 v0.31: Phase 3 では furniture / humanModels / voids は許容されるので
+      // 空チェックは外す (BMS テンプレは設備を事前配置するため空ではない)。
       expect(plan.floors).toHaveLength(1)
       expect(plan.floors[0]!.columns).toEqual([])
       expect(plan.floors[0]!.pipeSpaces).toEqual([])
-      expect(plan.floors[0]!.furniture).toEqual([])
 
       // Zod 検証
       const schemaResult = FloorplanSchema.safeParse(plan)
