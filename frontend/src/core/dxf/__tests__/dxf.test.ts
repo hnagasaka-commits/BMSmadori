@@ -348,8 +348,12 @@ describe('exportFloorplanToDxf', () => {
     expect(dxf).toContain('\\U+8B70') // 議
     expect(dxf).toContain('\\U+5BA4') // 室
     expect(dxf).toContain('\\U+03B1') // α (ギリシャ文字も escape される)
-    // AC1021 (R2007) でファイルが宣言される
-    expect(dxf).toContain('AC1021')
+    // §M155 v0.37: AutoCAD 互換性のため AC1009 (R12) でファイルを宣言
+    expect(dxf).toContain('AC1009')
+    // 必須 TABLES セクションがある
+    expect(dxf).toContain('LAYER')
+    expect(dxf).toContain('CONTINUOUS')
+    expect(dxf).toContain('STANDARD')
     // round-trip で復元
     const { floorplan: round } = importDxfText(dxf)
     expect(round.floors[0]!.rooms[0]!.customName).toBe('会議室α')
@@ -392,8 +396,10 @@ describe('exportFloorplanToDxf', () => {
       ],
     }
     const dxf = exportFloorplanToDxf(plan)
-    // LWPOLYLINE (= 設備外形) が含まれる
-    expect(dxf).toContain('LWPOLYLINE')
+    // §M155 v0.37: R12 互換のため POLYLINE+VERTEX+SEQEND (LWPOLYLINE は R14 以降)
+    expect(dxf).toContain('POLYLINE')
+    expect(dxf).toContain('VERTEX')
+    expect(dxf).toContain('SEQEND')
     // 旧来の INSERT も残ること (再 import 互換)
     expect(dxf).toContain('INSERT')
     // 設備のレイヤー名 (E-LIGHT 慣習名) が含まれる
