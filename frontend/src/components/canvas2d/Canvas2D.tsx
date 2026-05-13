@@ -286,6 +286,10 @@ export function Canvas2D() {
     return dx >= dy ? [cand[0], prev[1]] : [prev[0], cand[1]]
   }
 
+  // §M119 v0.28: 2D の表示レイヤー (floor / ceiling)
+  const layerMode = useEditorStore((s) => s.layerMode)
+  const setLayerMode = useEditorStore((s) => s.setLayerMode)
+
   return (
     <div
       ref={containerRef}
@@ -301,6 +305,54 @@ export function Canvas2D() {
       }
     >
       <OrientationCompass />
+      {/* §M119 v0.28: 床 / 天井 レイヤー切替トグル (左下) */}
+      <div
+        data-testid="layer-mode-toggle"
+        style={{
+          position: 'absolute',
+          left: 12,
+          bottom: 12,
+          background: 'rgba(255,255,255,0.9)',
+          borderRadius: 6,
+          padding: 4,
+          display: 'flex',
+          gap: 2,
+          fontSize: 12,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+          zIndex: 5,
+        }}
+      >
+        <button
+          type="button"
+          data-testid="layer-mode-floor"
+          onClick={() => setLayerMode('floor')}
+          style={{
+            border: 'none',
+            background: layerMode === 'floor' ? '#3b82f6' : 'transparent',
+            color: layerMode === 'floor' ? 'white' : '#374151',
+            padding: '4px 10px',
+            borderRadius: 4,
+            cursor: 'pointer',
+          }}
+        >
+          床レイヤー
+        </button>
+        <button
+          type="button"
+          data-testid="layer-mode-ceiling"
+          onClick={() => setLayerMode('ceiling')}
+          style={{
+            border: 'none',
+            background: layerMode === 'ceiling' ? '#16a34a' : 'transparent',
+            color: layerMode === 'ceiling' ? 'white' : '#374151',
+            padding: '4px 10px',
+            borderRadius: 4,
+            cursor: 'pointer',
+          }}
+        >
+          天井レイヤー
+        </button>
+      </div>
       {size.w > 0 && size.h > 0 && (
         <Stage
           ref={stageRef}
@@ -338,31 +390,49 @@ export function Canvas2D() {
             scale={zoom}
             gridSize={gridSize}
           />
-          <Layer>
+          {/* §M119 v0.28: 天井レイヤー時は床面プラン要素 (部屋/壁/ドア/窓/柱) を
+              半透明にして奥に退け、天井設備マークを際立たせる。
+              listening も false にしてクリックを通さない (= 床要素を編集不可)。 */}
+          <Layer
+            opacity={layerMode === 'ceiling' ? 0.35 : 1}
+            listening={layerMode !== 'ceiling'}
+          >
             {rooms.map((r) => (
               <RoomShape key={r.id} room={r} scale={zoom} gridSize={gridSize} />
             ))}
           </Layer>
-          <Layer>
+          <Layer
+            opacity={layerMode === 'ceiling' ? 0.35 : 1}
+            listening={layerMode !== 'ceiling'}
+          >
             {walls.map((w) => (
               <WallLine key={w.id} wall={w} scale={zoom} />
             ))}
           </Layer>
-          <Layer>
+          <Layer
+            opacity={layerMode === 'ceiling' ? 0.35 : 1}
+            listening={layerMode !== 'ceiling'}
+          >
             {(floor?.doors ?? []).map((d) => {
               const wall = wallById.get(d.wallId)
               if (wall == null) return null
               return <DoorMark key={d.id} door={d} wall={wall} scale={zoom} />
             })}
           </Layer>
-          <Layer>
+          <Layer
+            opacity={layerMode === 'ceiling' ? 0.35 : 1}
+            listening={layerMode !== 'ceiling'}
+          >
             {windows.map((win) => {
               const wall = wallById.get(win.wallId)
               if (wall == null) return null
               return <WindowMark key={win.id} window={win} wall={wall} scale={zoom} />
             })}
           </Layer>
-          <Layer>
+          <Layer
+            opacity={layerMode === 'ceiling' ? 0.35 : 1}
+            listening={layerMode !== 'ceiling'}
+          >
             {/* §M20: 柱はクリック選択するため listening:true。
                 §M25: 家具は同レイヤーではなく上に重ねる (家具は柱より上位レイヤー) */}
             {(floor?.columns ?? []).map((c) => (

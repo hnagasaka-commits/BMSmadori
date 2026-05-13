@@ -14,6 +14,7 @@
  *  - scale は省略 (1.0 固定)。catalog 自体に複数サイズが入る前提
  */
 
+import type { FurnitureMount } from '@/types'
 import type { FurniturePiece } from '@/components/canvas3d/furniturePresets'
 
 /**
@@ -38,6 +39,8 @@ export type FurnitureCategory =
   | 'work'
   | 'lighting'
   | 'misc'
+  /** §M117 v0.28: ビルメンテナンス用の点検対象設備 (天井 / 床)。BMS 用途の DXF 取込で自動追加されるほか、Sidebar からも手動配置できる */
+  | 'bms'
 
 export const FURNITURE_CATEGORY_LABELS: Record<FurnitureCategory, string> = {
   living: 'リビング',
@@ -49,10 +52,12 @@ export const FURNITURE_CATEGORY_LABELS: Record<FurnitureCategory, string> = {
   work: 'ワーク',
   lighting: '照明',
   misc: 'その他',
+  bms: 'ビルメンテ設備',
 }
 
 /** §M92 v0.20: Sidebar グルーピング用の表示順 (上から登場させる順) */
 export const FURNITURE_CATEGORY_ORDER: readonly FurnitureCategory[] = [
+  'bms',
   'living',
   'dining',
   'kitchen',
@@ -73,6 +78,12 @@ export type FurnitureCatalogEntry = {
   minRoom: { w: number; h: number }
   /** カタログから生成される子ピース */
   pieces: ReadonlyArray<FurniturePiece>
+  /**
+   * §M117 v0.28: 既定の取り付け面。BMS 設備のうち天井に取り付くもの (照明 / 検知器
+   * など) は 'ceiling'、消火器など床置きは 'floor'。省略時は 'floor' 扱い。
+   * 配置時に FurnitureInstance.mountTo にコピーされ、3D / 2D で動作分岐する。
+   */
+  mountToDefault?: FurnitureMount
 }
 
 /**
@@ -1564,6 +1575,205 @@ const ENTRIES: FurnitureCatalogEntry[] = [
         size: [1120, 360, 720],
         shape: 'box',
         material: { color: '#5a3a22', roughness: 0.7, metalness: 0.0 },
+      },
+    ],
+  },
+  // §M117 v0.28 ----------------------------------------------------------------
+  // ビルメンテナンス点検設備。mountToDefault='ceiling' のものは 3D で部屋の天井 (floor.ceilingHeight) から吊り下げ表示し、
+  // 床設備 (消火器) は通常通り床に置く。pieces は「ローカル原点 = 設備底面の中央」基準で記述する
+  // (= 既存家具と同じ慣習)。3D 側で mountTo === 'ceiling' のとき totalHeight = piece AABB の Y 最大値を使って
+  // group.position.y = ceilingHeight - totalHeight で吊り下げる。
+  // ----------------------------------------------------------------------------
+  {
+    id: 'ceiling-light-led',
+    displayName: 'LED ベースライト',
+    category: 'bms',
+    mountToDefault: 'ceiling',
+    minRoom: { w: 600, h: 600 },
+    pieces: [
+      {
+        id: 'panel',
+        position: [0, 30, 0],
+        size: [600, 60, 600],
+        shape: 'box',
+        material: { color: '#f9f9f3', roughness: 0.35, metalness: 0.05 },
+      },
+      {
+        id: 'frame',
+        position: [0, 56, 0],
+        size: [620, 12, 620],
+        shape: 'box',
+        material: { color: '#cfcfd4', roughness: 0.45, metalness: 0.35 },
+      },
+    ],
+  },
+  {
+    id: 'ceiling-downlight',
+    displayName: 'ダウンライト',
+    category: 'bms',
+    mountToDefault: 'ceiling',
+    minRoom: { w: 150, h: 150 },
+    pieces: [
+      {
+        id: 'rim',
+        position: [0, 50, 0],
+        size: [120, 24, 120],
+        shape: 'box',
+        material: { color: '#dfdfd9', roughness: 0.4, metalness: 0.25 },
+      },
+      {
+        id: 'lamp',
+        position: [0, 20, 0],
+        size: [80, 40, 80],
+        shape: 'box',
+        material: { color: '#fff3c4', roughness: 0.3, metalness: 0.1 },
+      },
+    ],
+  },
+  {
+    id: 'smoke-detector',
+    displayName: '煙感知器',
+    category: 'bms',
+    mountToDefault: 'ceiling',
+    minRoom: { w: 130, h: 130 },
+    pieces: [
+      {
+        id: 'cover',
+        position: [0, 20, 0],
+        size: [130, 40, 130],
+        shape: 'box',
+        material: { color: '#f4f4ee', roughness: 0.55, metalness: 0.05 },
+      },
+    ],
+  },
+  {
+    id: 'heat-detector',
+    displayName: '熱感知器',
+    category: 'bms',
+    mountToDefault: 'ceiling',
+    minRoom: { w: 130, h: 130 },
+    pieces: [
+      {
+        id: 'cover',
+        position: [0, 20, 0],
+        size: [130, 40, 130],
+        shape: 'box',
+        material: { color: '#c83a2a', roughness: 0.55, metalness: 0.05 },
+      },
+    ],
+  },
+  {
+    id: 'ac-cassette-4way',
+    displayName: '天井カセット (4 方向)',
+    category: 'bms',
+    mountToDefault: 'ceiling',
+    minRoom: { w: 900, h: 900 },
+    pieces: [
+      {
+        id: 'panel',
+        position: [0, 30, 0],
+        size: [840, 60, 840],
+        shape: 'box',
+        material: { color: '#ededec', roughness: 0.45, metalness: 0.1 },
+      },
+      {
+        id: 'body',
+        position: [0, 200, 0],
+        size: [780, 280, 780],
+        shape: 'box',
+        material: { color: '#cfcfcb', roughness: 0.5, metalness: 0.15 },
+      },
+    ],
+  },
+  {
+    id: 'emergency-light',
+    displayName: '誘導灯',
+    category: 'bms',
+    mountToDefault: 'ceiling',
+    minRoom: { w: 320, h: 200 },
+    pieces: [
+      {
+        id: 'panel',
+        position: [0, 80, 0],
+        size: [320, 160, 30],
+        shape: 'box',
+        material: { color: '#1f9c4d', roughness: 0.4, metalness: 0.1 },
+      },
+      {
+        id: 'hanger',
+        position: [0, 175, 0],
+        size: [40, 30, 30],
+        shape: 'box',
+        material: { color: '#9aa0a6', roughness: 0.5, metalness: 0.4 },
+      },
+    ],
+  },
+  {
+    id: 'speaker-ceiling',
+    displayName: '天井スピーカー',
+    category: 'bms',
+    mountToDefault: 'ceiling',
+    minRoom: { w: 220, h: 220 },
+    pieces: [
+      {
+        id: 'cover',
+        position: [0, 40, 0],
+        size: [220, 80, 220],
+        shape: 'box',
+        material: { color: '#efeee9', roughness: 0.55, metalness: 0.05 },
+      },
+    ],
+  },
+  {
+    id: 'sprinkler-head',
+    displayName: 'スプリンクラーヘッド',
+    category: 'bms',
+    mountToDefault: 'ceiling',
+    minRoom: { w: 80, h: 80 },
+    pieces: [
+      {
+        id: 'plate',
+        position: [0, 10, 0],
+        size: [80, 20, 80],
+        shape: 'box',
+        material: { color: '#dadada', roughness: 0.45, metalness: 0.4 },
+      },
+      {
+        id: 'head',
+        position: [0, 60, 0],
+        size: [30, 80, 30],
+        shape: 'box',
+        material: { color: '#b58a3c', roughness: 0.35, metalness: 0.7 },
+      },
+    ],
+  },
+  {
+    id: 'fire-extinguisher',
+    displayName: '消火器',
+    category: 'bms',
+    mountToDefault: 'floor',
+    minRoom: { w: 200, h: 200 },
+    pieces: [
+      {
+        id: 'body',
+        position: [0, 280, 0],
+        size: [160, 560, 160],
+        shape: 'box',
+        material: { color: '#c8262e', roughness: 0.5, metalness: 0.2 },
+      },
+      {
+        id: 'collar',
+        position: [0, 580, 0],
+        size: [120, 60, 120],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.4, metalness: 0.45 },
+      },
+      {
+        id: 'horn',
+        position: [80, 540, 0],
+        size: [120, 30, 30],
+        shape: 'box',
+        material: { color: '#1a1a1a', roughness: 0.4, metalness: 0.3 },
       },
     ],
   },

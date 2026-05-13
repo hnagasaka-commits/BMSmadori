@@ -27,6 +27,7 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
   const select = useEditorStore((s) => s.select)
   const selected = useEditorStore((s) => s.selected)
   const tool = useEditorStore((s) => s.tool)
+  const layerMode = useEditorStore((s) => s.layerMode)
   const moveFurniture = useFloorplanStore((s) => s.moveFurniture)
   // §M54 v0.7: select ツール以外では家具を選択/ドラッグさせない
   const interactive = tool === 'select'
@@ -34,7 +35,14 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
   const entry = getCatalogEntry(furniture.catalogId)
   if (entry == null) return null
 
+  // §M119 v0.28: レイヤーモードで表示分岐
+  //  - layerMode='floor':   mountTo='floor' のみ表示 (旧挙動)
+  //  - layerMode='ceiling': mountTo='ceiling' のみ表示
+  const mountTo = furniture.mountTo ?? 'floor'
+  if (mountTo !== layerMode) return null
+
   const isSelected = selected?.kind === 'furniture' && selected.id === furniture.id
+  const isCeilingItem = mountTo === 'ceiling'
 
   // 家具の代表サイズ = pieces の AABB を XZ 平面に投影
   const bbox = pieceAabbXZ(entry.pieces)
@@ -85,21 +93,46 @@ export function FurnitureMark({ furniture, scale, gridSize }: Props) {
         void gridSize
       }}
     >
-      {/* 外枠 + 名称 (scale 反映) */}
+      {/* §M119 v0.28: 天井設備は「天井に投影された設備」の慣習に従い、
+          角丸 + 対角クロスハッチ (✕) + 緑系の縁取りで描く。床設備は従来通り。 */}
       <Rect
         x={minX * scale}
         y={minZ * scale}
         width={w * scale}
         height={h * scale}
-        fill={isSelected ? 'rgba(59,130,246,0.10)' : 'rgba(0,0,0,0.05)'}
-        stroke={isSelected ? '#3b82f6' : '#6b7280'}
+        cornerRadius={isCeilingItem ? 4 : 0}
+        fill={
+          isSelected
+            ? 'rgba(59,130,246,0.10)'
+            : isCeilingItem
+              ? 'rgba(34,197,94,0.10)'
+              : 'rgba(0,0,0,0.05)'
+        }
+        stroke={isSelected ? '#3b82f6' : isCeilingItem ? '#16a34a' : '#6b7280'}
         strokeWidth={isSelected ? 2 : 1}
-        dash={[6, 4]}
+        dash={isCeilingItem ? [4, 3] : [6, 4]}
       />
+      {isCeilingItem && (
+        <>
+          {/* 対角クロスハッチ (✕) — 「天井設備」の慣習表記 */}
+          <Line
+            points={[minX * scale, minZ * scale, (minX + w) * scale, (minZ + h) * scale]}
+            stroke={isSelected ? '#3b82f6' : '#16a34a'}
+            strokeWidth={1}
+            listening={false}
+          />
+          <Line
+            points={[(minX + w) * scale, minZ * scale, minX * scale, (minZ + h) * scale]}
+            stroke={isSelected ? '#3b82f6' : '#16a34a'}
+            strokeWidth={1}
+            listening={false}
+          />
+        </>
+      )}
       <Text
         text={entry.displayName + scLabel}
         fontSize={10}
-        fill="#525252"
+        fill={isCeilingItem ? '#166534' : '#525252'}
         x={minX * scale + 4}
         y={minZ * scale + 4}
         listening={false}

@@ -157,7 +157,10 @@ export function Canvas3D() {
                 <DoorPanelsLayer scene={s.scene} />
                 {/* §M98 v0.22: 階段 (stairs-start) を 3D で立ち上げる */}
                 <StairsLayer stairs={s.scene.stairs} />
-                <Furniture furniture={s.floor.furniture} />
+                <Furniture
+                  furniture={s.floor.furniture}
+                  ceilingHeightMm={s.floor.ceilingHeight}
+                />
                 {/* §M61 v0.9: 床ごとに人物モデルを描画 (家具と同様にドラッグ移動 + クリック選択) */}
                 <Humans humans={s.floor.humanModels} />
               </group>
@@ -572,7 +575,95 @@ function TexturedScene({ scene }: { scene: SceneSpec }) {
     <>
       <FloorPlates scene={scene} textures={textures} />
       <WallsWithOpenings scene={scene} textures={textures} />
+      {/* §M118 v0.28: 天井プレートを半透明で描画。BMS 用途で天井設備の位置感を伝えつつ
+          部屋内部が阻害されないよう opacity 0.12 + depthWrite=false。
+          側面 (壁とのスキマ) は壁が埋めているので、上から見下ろし以外は透けないとうるさい。 */}
+      <CeilingPlates scene={scene} />
     </>
+  )
+}
+
+/**
+ * §M118 v0.28: 各部屋の床プレートと同じ XZ 形状で、Y = ceilingHeight にメッシュを置く。
+ *  - opacity 0.12 / DoubleSide / depthWrite=false
+ *  - 影は受けない (transparent + receiveShadow は破綻しがち)
+ *  - rect / polygon の両方に対応 (FloorPlates と同じ分岐)
+ */
+function CeilingPlates({ scene }: { scene: SceneSpec }) {
+  const ceilingY = scene.ceilingHeight * MM_TO_M
+  return (
+    <>
+      {scene.floorPlates.map((plate) => {
+        if (plate.shapeKind === 'rect') {
+          const center: [number, number, number] = [
+            plate.center[0] * MM_TO_M,
+            ceilingY,
+            plate.center[2] * MM_TO_M,
+          ]
+          const size: [number, number, number] = [
+            plate.size[0] * MM_TO_M,
+            0.06,
+            plate.size[2] * MM_TO_M,
+          ]
+          return (
+            <mesh key={`ceil-${plate.id}`} position={center}>
+              <boxGeometry args={size} />
+              <meshStandardMaterial
+                color="#f5f5f0"
+                roughness={0.85}
+                metalness={0.02}
+                transparent
+                opacity={0.12}
+                depthWrite={false}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+          )
+        }
+        return (
+          <CeilingPolygonMesh
+            key={`ceil-${plate.id}`}
+            pointsXZ={plate.pointsXZ}
+            y={ceilingY}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+function CeilingPolygonMesh({
+  pointsXZ,
+  y,
+}: {
+  pointsXZ: ReadonlyArray<readonly [number, number]>
+  y: number
+}) {
+  const geometry = useMemo(() => {
+    if (pointsXZ.length === 0) return null
+    const shape = new THREE.Shape()
+    const [x0, z0] = pointsXZ[0]!
+    shape.moveTo(x0 * MM_TO_M, z0 * MM_TO_M)
+    for (let i = 1; i < pointsXZ.length; i++) {
+      const [x, z] = pointsXZ[i]!
+      shape.lineTo(x * MM_TO_M, z * MM_TO_M)
+    }
+    shape.closePath()
+    return new THREE.ShapeGeometry(shape)
+  }, [pointsXZ])
+  if (geometry == null) return null
+  return (
+    <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, y, 0]} geometry={geometry}>
+      <meshStandardMaterial
+        color="#f5f5f0"
+        roughness={0.85}
+        metalness={0.02}
+        transparent
+        opacity={0.12}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
   )
 }
 

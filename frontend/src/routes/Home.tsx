@@ -11,7 +11,7 @@
  *  - プラン一覧は useEffect で initial mount に取得
  *  - 削除や新規作成のあとは再取得 (再現性重視で setState ではなくバージョン番号で発火)
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2 } from 'lucide-react'
 import {
@@ -22,6 +22,7 @@ import {
 } from '@/data/storage'
 import { createEmptyFloorplan } from '@/store/floorplanStore'
 import { TEMPLATE_CARDS } from '@/data/templates'
+import { importDxfText, type DxfImportReport } from '@/core/dxf'
 import type { Floorplan } from '@/types'
 
 export function Home() {
@@ -50,14 +51,22 @@ export function Home() {
     await refresh()
   }
 
-  async function handleCreate(source: { kind: 'blank' } | { kind: 'template'; id: string }) {
+  async function handleCreate(
+    source:
+      | { kind: 'blank' }
+      | { kind: 'template'; id: string }
+      | { kind: 'dxf'; plan: Floorplan; fileName: string },
+  ) {
     let plan: Floorplan
     if (source.kind === 'blank') {
       plan = createEmptyFloorplan()
-    } else {
+    } else if (source.kind === 'template') {
       const card = TEMPLATE_CARDS.find((t) => t.id === source.id)
       if (card == null) return
       plan = card.build()
+    } else {
+      // §M115 v0.28: CAD インポートで構築済みのプランをそのまま使う
+      plan = source.plan
     }
     const id = crypto.randomUUID()
     // 新規作成時は metadata.name を初期化
@@ -204,17 +213,60 @@ export function Home() {
 }
 
 /**
- * §M23: 新規作成ピッカー。「テンプレートから作成」「自由に作成」の 2 択。
- * テンプレを選ぶと一覧 → クリックで決定。
+ * §M23: 新規作成ピッカー。
+ * §M115 v0.28: BMS 用途向けに「CAD 図面 (DXF) からアップロード」の選択肢を追加。
+ *   - DXF テキストを FileReader で読み込み、importDxfText で Floorplan に変換
+ *   - パース成功 → そのまま編集画面へ。レポートは UI トーストではなく editor で表示
+ *   - パース失敗 → モーダル内でエラーメッセージを表示しキャンセル可能
  */
 function NewPlanPicker({
   onCancel,
   onPick,
 }: {
   onCancel: () => void
-  onPick: (source: { kind: 'blank' } | { kind: 'template'; id: string }) => void
+  onPick: (
+    source:
+      | { kind: 'blank' }
+      | { kind: 'template'; id: string }
+      | { kind: 'dxf'; plan: Floorplan; fileName: string },
+  ) => void
 }) {
-  const [mode, setMode] = useState<'choose' | 'template'>('choose')
+  const [mode, setMode] = useState<'choose' | 'template' | 'dxf'>('choose')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [dxfError, setDxfError] = useState<string | null>(null)
+  const [dxfReport, setDxfReport] = useState<DxfImportReport | null>(null)
+  const [dxfBusy, setDxfBusy] = useState(false)
+  const dxfPendingRef = useRef<{ plan: Floorplan; fileName: string } | null>(null)
+
+  async function onDxfFile(file: File) {
+    setDxfBusy(true)
+    setDxfError(null)
+    setDxfReport(null)
+    try {
+      const text = await file.text()
+      const { floorplan, report } = importDxfText(text, { fileName: file.name })
+      if (report.rooms === 0 && report.walls === 0) {
+        setDxfError(
+          'DXF を読み込めましたが、認識できる壁・部屋が見つかりませんでした。レイヤー名 (WALL / ROOM / 壁 / 部屋 など) を確認してください。',
+        )
+        return
+      }
+      dxfPendingRef.current = { plan: floorplan, fileName: file.name }
+      setDxfReport(report)
+    } catch (err) {
+      setDxfError(
+        `DXF の解析に失敗しました: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    } finally {
+      setDxfBusy(false)
+    }
+  }
+
+  function confirmDxfImport() {
+    const pending = dxfPendingRef.current
+    if (pending == null) return
+    onPick({ kind: 'dxf', plan: pending.plan, fileName: pending.fileName })
+  }
 
   return (
     <div
@@ -240,7 +292,7 @@ function NewPlanPicker({
           background: 'white',
           borderRadius: 12,
           padding: 24,
-          minWidth: 480,
+          minWidth: 540,
           maxWidth: '90vw',
           maxHeight: '85vh',
           overflow: 'auto',
@@ -249,17 +301,17 @@ function NewPlanPicker({
         <h2 style={{ margin: '0 0 16px', fontSize: 18 }}>新規間取りを作成</h2>
 
         {mode === 'choose' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <button
               type="button"
               className="btn"
               onClick={() => setMode('template')}
               data-testid="new-plan-from-template"
-              style={{ padding: 24, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
+              style={{ padding: 20, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
             >
               <strong>テンプレートから作成</strong>
-              <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>
-                既製の間取り (平屋 1LDK / 2LDK / 3LDK) を起点に編集
+              <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>
+                既製の間取り (1LDK / 2LDK / 3LDK)
               </span>
             </button>
             <button
@@ -267,11 +319,23 @@ function NewPlanPicker({
               className="btn"
               onClick={() => onPick({ kind: 'blank' })}
               data-testid="new-plan-blank"
-              style={{ padding: 24, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
+              style={{ padding: 20, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
             >
               <strong>自由に作成</strong>
-              <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>
-                空のプランから線を引いて間取りを描く
+              <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>
+                空のプランから線を引く
+              </span>
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setMode('dxf')}
+              data-testid="new-plan-from-dxf"
+              style={{ padding: 20, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
+            >
+              <strong>CAD 図面から作成</strong>
+              <span style={{ fontSize: 11, color: 'var(--gray-500)' }}>
+                DXF をアップロードして 2D / 3D 復元 (BMS 用途)
               </span>
             </button>
           </div>
@@ -310,15 +374,114 @@ function NewPlanPicker({
           </div>
         )}
 
-        <button
-          type="button"
-          className="btn"
-          onClick={onCancel}
-          style={{ marginTop: 12, marginLeft: mode === 'template' ? 8 : 0 }}
-          data-testid="new-plan-cancel"
-        >
-          キャンセル
-        </button>
+        {mode === 'dxf' && (
+          <div data-testid="new-plan-dxf-panel">
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--gray-600)' }}>
+              ビルメンテナンス点検用の図面 (DXF) を読み込みます。壁 / 部屋 / 天井高 /
+              天井設備 (照明・煙感知器・空調など) と床設備 (消火器など) をレイヤー名から自動抽出します。
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".dxf,.DXF,application/dxf,application/x-dxf"
+              data-testid="new-plan-dxf-input"
+              disabled={dxfBusy}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file != null) void onDxfFile(file)
+              }}
+              style={{ marginBottom: 12 }}
+            />
+            {dxfBusy && (
+              <div style={{ padding: 8, fontSize: 13 }}>DXF を解析中…</div>
+            )}
+            {dxfError != null && (
+              <div
+                data-testid="new-plan-dxf-error"
+                role="alert"
+                style={{
+                  padding: 10,
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 6,
+                  color: '#991b1b',
+                  fontSize: 13,
+                  marginBottom: 8,
+                }}
+              >
+                {dxfError}
+              </div>
+            )}
+            {dxfReport != null && (
+              <div
+                data-testid="new-plan-dxf-report"
+                style={{
+                  padding: 10,
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  marginBottom: 12,
+                  display: 'grid',
+                  gap: 4,
+                }}
+              >
+                <strong style={{ fontSize: 13 }}>解析結果</strong>
+                <span>
+                  壁: {dxfReport.walls} 本 / 部屋: {dxfReport.rooms} 室 / 設備:{' '}
+                  {dxfReport.equipment} 件
+                </span>
+                <span>
+                  天井高: {dxfReport.ceilingHeight} mm / 範囲: {dxfReport.bboxMm.w}×
+                  {dxfReport.bboxMm.h} mm
+                </span>
+                {Object.keys(dxfReport.equipmentByCatalog).length > 0 && (
+                  <span style={{ color: 'var(--gray-600)' }}>
+                    内訳:{' '}
+                    {Object.entries(dxfReport.equipmentByCatalog)
+                      .map(([k, v]) => `${k}: ${v}`)
+                      .join(' / ')}
+                  </span>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setMode('choose')
+                  setDxfError(null)
+                  setDxfReport(null)
+                  dxfPendingRef.current = null
+                }}
+              >
+                ← 戻る
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={dxfReport == null}
+                onClick={confirmDxfImport}
+                data-testid="new-plan-dxf-confirm"
+              >
+                この内容で取り込む
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'choose' && (
+          <button
+            type="button"
+            className="btn"
+            onClick={onCancel}
+            style={{ marginTop: 12 }}
+            data-testid="new-plan-cancel"
+          >
+            キャンセル
+          </button>
+        )}
       </div>
     </div>
   )

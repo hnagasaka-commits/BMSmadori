@@ -23,7 +23,14 @@ import type { FurniturePiece } from './furniturePresets'
 const MM_TO_M = 1 / 1000
 const M_TO_MM = 1000
 
-export function Furniture({ furniture }: { furniture: Floor['furniture'] }) {
+export function Furniture({
+  furniture,
+  ceilingHeightMm,
+}: {
+  furniture: Floor['furniture']
+  /** §M118 v0.28: 親フロアの天井高 (mm)。mountTo='ceiling' の家具の Y 位置補正に使う */
+  ceilingHeightMm: number
+}) {
   const selected = useEditorStore((s) => s.selected)
   const selectedId = selected?.kind === 'furniture' ? selected.id : null
 
@@ -34,15 +41,29 @@ export function Furniture({ furniture }: { furniture: Floor['furniture'] }) {
         if (entry == null) return null
         const isSelected = fi.id === selectedId
         const scale3 = furnitureScale3(fi.scale)
+        // §M118 v0.28: 天井設備の Y 位置補正。
+        //   mountTo='ceiling' の場合、設備のローカル AABB 上端 (= piece.position[1] + size[1]/2 の最大値) を
+        //   ceilingHeight に貼り付ける位置を yMm に渡す。yMm はそのまま group.position.y に乗る。
+        //   既存の y (床積み) は無視する (天井設備は床積みしない)。
+        const mountTo = fi.mountTo ?? 'floor'
+        let yMm = fi.y ?? 0
+        if (mountTo === 'ceiling') {
+          let topLocal = 0
+          for (const p of entry.pieces) {
+            const t = p.position[1] + p.size[1] / 2
+            if (t > topLocal) topLocal = t
+          }
+          // scale Y を考慮して上端を求める
+          const topScaled = topLocal * scale3[1]
+          yMm = ceilingHeightMm - topScaled
+        }
         return (
           <FurnitureInstanceMesh
             key={fi.id}
             id={fi.id}
             pieces={entry.pieces}
             positionMm={fi.position}
-            // §M94 v0.21: 既存家具との重なりを検知して載せた天面高さ (mm)。
-            // 既定 0 (床直置き)。store の addFurniture / moveFurniture で計算済み
-            yMm={fi.y ?? 0}
+            yMm={yMm}
             rotation={fi.rotation}
             instanceScale3={scale3}
             isSelected={isSelected}

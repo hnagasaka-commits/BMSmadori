@@ -62,6 +62,14 @@ export type ViewMode = '2d' | '3d'
  */
 export type LightingPreset = 'noon' | 'evening' | 'night'
 
+/**
+ * §M119 v0.28: 2D の表示レイヤー。
+ *  - 'floor'   (既定): 床に置くもの (壁 / 床 / 床家具) を表示。天井設備は非表示
+ *  - 'ceiling': 床面プランを薄くグレーアウトし、天井設備 (mountTo='ceiling') のマークを重畳描画する
+ * BMS 点検用途では DXF 取込直後に 'ceiling' を既定に立てる (setInitialFromImport)。
+ */
+export type LayerMode = 'floor' | 'ceiling'
+
 export type EditorState = {
   selected: SelectedElement
   tool: EditorTool
@@ -123,6 +131,11 @@ export type EditorState = {
    * 数値が入ると Canvas3D はその階のみ描画する (他階の壁/床/家具を全て非表示)。
    */
   visibleFloorIndex: number | null
+  /**
+   * §M119 v0.28: 2D の表示レイヤー (床 / 天井)。
+   * UI のトグルで切替。'ceiling' 時は床面プランをグレーアウトして天井設備マークを重畳。
+   */
+  layerMode: LayerMode
   /** §11 Phase 2 / M17: 太陽時 (0..24)。LightingRig が太陽位置に変換 */
   sunHour: number
   /** §11 Phase 2 / M17: 季節。日の出/日の入り時刻と南中高度を決める */
@@ -168,6 +181,8 @@ export type EditorState = {
   setRoofStyle: (style: 'none' | 'flat' | 'gable' | 'shed') => void
   /** §M99 v0.22: 3D の表示対象階を設定 (null=全階表示) */
   setVisibleFloorIndex: (index: number | null) => void
+  /** §M119 v0.28: 2D レイヤー (floor/ceiling) の切替 */
+  setLayerMode: (mode: LayerMode) => void
   setSunHour: (hour: number) => void
   setSeason: (season: Season) => void
   enterReadonly: (reason: string) => void
@@ -208,6 +223,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpvHumanId: null,
   roofStyle: 'none',
   visibleFloorIndex: null,
+  layerMode: 'floor',
   sunHour: 12,
   season: 'spring',
   readonly: false,
@@ -247,6 +263,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   exitFpv: () => set({ fpvHumanId: null }),
   setRoofStyle: (roofStyle) => set({ roofStyle }),
   setVisibleFloorIndex: (visibleFloorIndex) => set({ visibleFloorIndex }),
+  setLayerMode: (layerMode) => set({ layerMode }),
   setSunHour: (sunHour) => set({ sunHour: Math.max(0, Math.min(24, sunHour)) }),
   setSeason: (season) => set({ season }),
   enterReadonly: (reason) => set({ readonly: true, readonlyReason: reason }),

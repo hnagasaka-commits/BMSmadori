@@ -126,6 +126,8 @@ const FurnitureInstanceSchema = z.object({
   y: z.number().nonnegative().optional(),
   // §M107 v0.25: 16 進カラー (#rrggbb) で全パーツの色を上書き
   colorOverride: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  // §M117 v0.28: 取り付け面 (floor / ceiling)。未指定は 'floor' 扱い
+  mountTo: z.enum(['floor', 'ceiling']).optional(),
 })
 
 const HumanModelSchema = z.object({

@@ -1272,7 +1272,8 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
     const state = get()
     const floorIdx = state.activeFloorIndex; const floor = state.floorplan.floors[floorIdx]
     if (floor == null) return null
-    if (getCatalogEntry(input.catalogId) == null) return null
+    const entry = getCatalogEntry(input.catalogId)
+    if (entry == null) return null
     const id = input.id ?? crypto.randomUUID()
     const draft: FurnitureInstance = {
       id,
@@ -1280,9 +1281,12 @@ export const useFloorplanStore = create<FloorplanState>((set, get) => ({
       position: [Math.round(input.position[0]), Math.round(input.position[1])],
       rotation: input.rotation ?? 0,
       ...(input.scale !== undefined && { scale: input.scale }),
+      // §M117 v0.28: 既定の取り付け面をカタログから引き継ぐ (天井設備は 'ceiling')
+      ...(entry.mountToDefault != null && { mountTo: entry.mountToDefault }),
     }
-    // §M94 v0.21: 既存家具と XZ 重なる場合、重なるものの最も高い天面の上に積む
-    const stackY = computeFurnitureStackY(draft, floor.furniture)
+    // §M94 v0.21: 既存家具と XZ 重なる場合、重なるものの最も高い天面の上に積む。
+    // §M117 v0.28: 天井設備 (mountTo='ceiling') は床積みロジックの対象外
+    const stackY = draft.mountTo === 'ceiling' ? 0 : computeFurnitureStackY(draft, floor.furniture)
     const fi: FurnitureInstance = stackY > 0 ? { ...draft, y: stackY } : draft
     snapshotForHistory(state.floorplan)
     set({

@@ -143,6 +143,16 @@ export type Shape =
       edgeIds: EdgeId[] // length === points.length
     }
 
+/**
+ * §M117 v0.28: 家具・設備の取り付け面。
+ * - 'floor'   (既定): 床に置く。Y 位置は y フィールド (= 床からのオフセット)
+ * - 'ceiling': 天井から吊る。Y 位置は floor.ceilingHeight - pieceHeight として計算
+ *
+ * BMS 用途 (照明 / 検知器 / 空調カセット / 誘導灯 / スピーカー / スプリンクラー) は
+ * 'ceiling'、消火器などは 'floor'。
+ */
+export type FurnitureMount = 'floor' | 'ceiling'
+
 /** §5.2.1 家具インスタンス (Phase 2 から本格運用、Phase 1 では空配列) */
 export type FurnitureInstance = {
   id: string
@@ -167,6 +177,12 @@ export type FurnitureInstance = {
    * undefined ならカタログのオリジナル配色を使う。
    */
   colorOverride?: string
+  /**
+   * §M117 v0.28: 取り付け面 ('floor' | 'ceiling')。未指定は 'floor' 扱い。
+   * 'ceiling' の場合、3D 描画では floor.ceilingHeight から吊り下げる位置に Y を補正する。
+   * 2D 描画では「天井レイヤー」モード時のみ表示し、慣習的なマーク (角丸 + ✕) で描く。
+   */
+  mountTo?: FurnitureMount
 }
 
 /**
