@@ -46,6 +46,8 @@ const PLACEMENT: Record<string, FurnitureMount> = {
   'K-008': 'ceiling',
   'K-017': 'ceiling',
   'K-018': 'ceiling',
+  // §M144 v0.33: 新規 K-019 (定温式スポット感知器 防爆型・P型)
+  'K-019': 'ceiling',
   // 天井 (空調・換気)
   'A-001': 'ceiling',
   'A-002': 'ceiling',
@@ -59,9 +61,13 @@ const PLACEMENT: Record<string, FurnitureMount> = {
   'E-101': 'floor',
   'E-102': 'floor',
   'E-103': 'floor',
-  'E-105': 'floor',
+  // §M144 v0.33: E-105 → K-104 (自家発電設備), P-111 → A-111, P-113 → A-110, P-114 → A-109
+  'K-104': 'floor',
   'A-101': 'floor',
   'A-104': 'floor',
+  'A-109': 'floor',
+  'A-110': 'floor',
+  'A-111': 'floor',
   'K-101': 'floor',
   'K-103': 'floor',
   'P-101': 'floor',
@@ -71,9 +77,16 @@ const PLACEMENT: Record<string, FurnitureMount> = {
   'S-105': 'floor',
   'S-106': 'floor',
   'G-101': 'floor',
+  // §M144 v0.33: 新規追加
+  'A-107': 'floor',
+  'A-108': 'floor',
+  'A-112': 'floor',
+  'A-113': 'floor',
+  'S-108': 'floor',
   // 壁 (消火栓・誘導灯・発信機・分電盤など)
   'E-201': 'wall',
-  'E-208': 'wall',
+  // §M144 v0.33: E-208 → K-216 (単相コンセント、火災報知系へ移動)
+  'K-216': 'wall',
   'P-201': 'wall',
   'S-201': 'wall',
   'S-202': 'wall',
@@ -83,6 +96,8 @@ const PLACEMENT: Record<string, FurnitureMount> = {
   'K-210': 'wall',
   'K-211': 'wall',
   'K-212': 'wall',
+  // §M144 v0.33: 新規 K-217 (避難口誘導灯 K-避難口誘導灯型)
+  'K-217': 'wall',
   'B-201': 'wall',
   'B-202': 'wall',
   // 屋上
@@ -777,7 +792,7 @@ export function buildFactoryTemplate() {
     // 電気室
     eq('E-101', 1500, 18000),
     eq('E-102', 3000, 18000),
-    eq('E-105', 4500, 18500),
+    eq('K-104', 4500, 18500),
     // 廊下
     ...detectors({ x: 6000, y: 16000, w: 22000, h: 2000 }, 5, 'E-007'),
     // 屋外 (送水口 + 防火水槽)
@@ -1085,7 +1100,7 @@ export function buildDataCenterTemplate() {
     // 電気室 (受配電 + UPS)
     eq('E-101', 2000, 13000),
     eq('E-102', 4000, 13000),
-    eq('E-105', 7000, 13500),
+    eq('K-104', 7000, 13500),
     eq('E-103', 9000, 13000),
     // 空調機械室
     eq('A-101', 13000, 13000),
@@ -1223,7 +1238,7 @@ export function buildMixedUseTemplate() {
     eq('E-101', 25000, 11000),
     eq('E-102', 27000, 11000),
     eq('K-101', 29000, 11000),
-    eq('E-105', 26000, 13000),
+    eq('K-104', 26000, 13000),
     // 倉庫
     ...gridLights({ x: 24000, y: 14000, w: 6000, h: 3000 }, 2, 1, 'E-006'),
     // 屋外 / 屋上

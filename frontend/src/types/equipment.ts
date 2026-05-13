@@ -33,6 +33,11 @@ export type EquipmentSpec = {
   height: number
   /** 2D マークの中央に描く短いシンボル (例: "◇", "DL", "送水") */
   symbol: string
+  /**
+   * §M144 v0.33: 補足情報 (出典コード / 注意事項 / 旧 ID との関連等)。
+   * UI (PropertyPanel) では note がある時のみ薄い文字で 1 行表示する。
+   */
+  note?: string
 }
 
 export type EquipmentMasterFile = {

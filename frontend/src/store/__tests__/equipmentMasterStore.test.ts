@@ -117,6 +117,29 @@ describe('equipmentMasterStore', () => {
       .addFurniture({ catalogId: 'UNKNOWN-999', position: [0, 0] })
     expect(id).toBeNull()
   })
+
+  it('§M144 v0.33: note フィールドが spec に保持される', () => {
+    useEquipmentMasterStore.getState().load({
+      ...SAMPLE_FILE,
+      equipment: [
+        ...SAMPLE_FILE.equipment,
+        {
+          id: 'A-107',
+          name: '熱源設備',
+          category: 'A',
+          placement: 'floor',
+          shape: 'rect',
+          width: 2500,
+          depth: 1500,
+          height: 2000,
+          symbol: '熱源',
+          note: 'チラー/ボイラー等の総称',
+        },
+      ],
+    })
+    const spec = useEquipmentMasterStore.getState().byId.get('A-107')
+    expect(spec?.note).toBe('チラー/ボイラー等の総称')
+  })
 })
 
 describe('§M135 v0.30: 壁取り付け設備の壁スナップ', () => {

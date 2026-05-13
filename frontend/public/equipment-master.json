@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "unit": "mm",
     "description": "ビルメンテナンス図面アプリ用 設備マスターデータ",
     "categoryColors": {
@@ -38,7 +38,7 @@
     { "id": "E-102", "name": "主幹盤",                   "category": "E", "placement": "floor",   "shape": "rect",   "width": 1500, "depth": 600,  "height": 2000, "symbol": "[主]" },
     { "id": "E-103", "name": "制御盤(E)",                "category": "E", "placement": "floor",   "shape": "rect",   "width": 800,  "depth": 400,  "height": 1800, "symbol": "[制E]" },
     { "id": "E-104", "name": "試験用分電盤",             "category": "E", "placement": "floor",   "shape": "rect",   "width": 600,  "depth": 300,  "height": 1500, "symbol": "[試]" },
-    { "id": "E-105", "name": "自家発電設備",             "category": "E", "placement": "floor",   "shape": "rect",   "width": 3000, "depth": 1500, "height": 2000, "symbol": "[DG]" },
+    { "id": "K-104", "name": "自家発電設備",             "category": "K", "placement": "floor",   "shape": "rect",   "width": 3000, "depth": 1500, "height": 2000, "symbol": "[DG]" },
 
     { "id": "E-201", "name": "分電盤(一般)",             "category": "E", "placement": "wall",    "shape": "rect",   "width": 600,  "depth": 150,  "height": 800,  "symbol": "[分]" },
     { "id": "E-202", "name": "手元開閉器",               "category": "E", "placement": "wall",    "shape": "rect",   "width": 200,  "depth": 100,  "height": 300,  "symbol": "[S]" },
@@ -47,7 +47,7 @@
     { "id": "E-205", "name": "壁付蛍光灯2",              "category": "E", "placement": "wall",    "shape": "rect",   "width": 1250, "depth": 150,  "height": 100,  "symbol": "▭W2" },
     { "id": "E-206", "name": "壁付蛍光灯1(予備灯付)",    "category": "E", "placement": "wall",    "shape": "rect",   "width": 1250, "depth": 150,  "height": 100,  "symbol": "▭W1+" },
     { "id": "E-207", "name": "壁付蛍光灯2(予備灯付)",    "category": "E", "placement": "wall",    "shape": "rect",   "width": 1250, "depth": 150,  "height": 100,  "symbol": "▭W2+" },
-    { "id": "E-208", "name": "単相コンセント",           "category": "E", "placement": "wall",    "shape": "rect",   "width": 100,  "depth": 50,   "height": 100,  "symbol": "⊏⊐" },
+    { "id": "K-216", "name": "単相コンセント",           "category": "K", "placement": "wall",    "shape": "rect",   "width": 100,  "depth": 50,   "height": 100,  "symbol": "⊏⊐" },
 
     { "id": "E-301", "name": "テレビアンテナ",           "category": "E", "placement": "roof",    "shape": "rect",   "width": 500,  "depth": 500,  "height": 3000, "symbol": "TV" },
     { "id": "E-302", "name": "避雷針",                   "category": "E", "placement": "roof",    "shape": "circle", "width": 100,  "depth": 100,  "height": 5000, "symbol": "↑" },
@@ -62,10 +62,10 @@
     { "id": "P-108", "name": "汚水ポンプ",               "category": "P", "placement": "floor",   "shape": "rect",   "width": 500,  "depth": 400,  "height": 600,  "symbol": "(汚P)" },
     { "id": "P-109", "name": "水中ポンプ",               "category": "P", "placement": "floor",   "shape": "circle", "width": 400,  "depth": 400,  "height": 600,  "symbol": "(水P)" },
     { "id": "P-110", "name": "排水水中ポンプ",           "category": "P", "placement": "floor",   "shape": "circle", "width": 400,  "depth": 400,  "height": 600,  "symbol": "(排水P)" },
-    { "id": "P-111", "name": "冷却水ポンプ",             "category": "P", "placement": "floor",   "shape": "rect",   "width": 600,  "depth": 400,  "height": 800,  "symbol": "(冷P)" },
+    { "id": "A-111", "name": "冷却水ポンプ",             "category": "A", "placement": "floor",   "shape": "rect",   "width": 600,  "depth": 400,  "height": 800,  "symbol": "(冷P)" },
     { "id": "P-112", "name": "給水制御盤",               "category": "P", "placement": "floor",   "shape": "rect",   "width": 800,  "depth": 400,  "height": 1800, "symbol": "[制P]" },
-    { "id": "P-113", "name": "グリース阻集器",           "category": "P", "placement": "floor",   "shape": "rect",   "width": 1000, "depth": 500,  "height": 500,  "symbol": "[GT]" },
-    { "id": "P-114", "name": "床上掃除口",               "category": "P", "placement": "floor",   "shape": "circle", "width": 200,  "depth": 200,  "height": 50,   "symbol": "⊙" },
+    { "id": "A-110", "name": "グリース阻集器",           "category": "A", "placement": "floor",   "shape": "rect",   "width": 1000, "depth": 500,  "height": 500,  "symbol": "[GT]" },
+    { "id": "A-109", "name": "床上掃除口",               "category": "A", "placement": "floor",   "shape": "circle", "width": 200,  "depth": 200,  "height": 50,   "symbol": "⊙" },
 
     { "id": "P-201", "name": "壁掛型貯湯湯沸器",         "category": "P", "placement": "wall",    "shape": "rect",   "width": 500,  "depth": 300,  "height": 600,  "symbol": "[湯]" },
 
@@ -184,6 +184,14 @@
     { "id": "B-204", "name": "レリーズ",                 "category": "B", "placement": "wall",    "shape": "circle", "width": 100,  "depth": 50,   "height": 100,  "symbol": "ER" },
     { "id": "B-205", "name": "救助袋",                   "category": "B", "placement": "wall",    "shape": "rect",   "width": 600,  "depth": 600,  "height": 800,  "symbol": "[救]" },
     { "id": "B-206", "name": "救助袋(斜降式)",           "category": "B", "placement": "wall",    "shape": "rect",   "width": 800,  "depth": 800,  "height": 1000, "symbol": "[救斜]" },
-    { "id": "B-207", "name": "救助袋(垂直式)",           "category": "B", "placement": "wall",    "shape": "rect",   "width": 800,  "depth": 800,  "height": 1000, "symbol": "[救垂]" }
+    { "id": "B-207", "name": "救助袋(垂直式)",           "category": "B", "placement": "wall",    "shape": "rect",   "width": 800,  "depth": 800,  "height": 1000, "symbol": "[救垂]" },
+
+    { "id": "A-107", "name": "熱源設備",                 "category": "A", "placement": "floor",   "shape": "rect",   "width": 2500, "depth": 1500, "height": 2000, "symbol": "熱源",   "note": "チラー/ボイラー等の総称。実機の規模に応じて寸法を上書きしてください" },
+    { "id": "A-108", "name": "空調機",                   "category": "A", "placement": "floor",   "shape": "rect",   "width": 2500, "depth": 1500, "height": 2000, "symbol": "AHU",    "note": "汎用AHU想定。実機の規模に応じて寸法を上書きしてください" },
+    { "id": "A-112", "name": "空冷式パッケージ型空気",    "category": "A", "placement": "floor",   "shape": "rect",   "width": 1500, "depth": 800,  "height": 1800, "symbol": "PAC2",   "note": "ソース側コード[A-空冷式パッケージ型空気]。A-101と同一機器の可能性あり(名前切れの疑い)" },
+    { "id": "A-113", "name": "空冷式パッケージ型空気調",  "category": "A", "placement": "floor",   "shape": "rect",   "width": 1500, "depth": 800,  "height": 1800, "symbol": "PAC3",   "note": "ソース側コード[A-空冷式パッケージ型空気調]。A-101と同一機器の可能性あり(名前切れの疑い)" },
+    { "id": "S-108", "name": "制御盤(S-制御盤系)",       "category": "S", "placement": "floor",   "shape": "rect",   "width": 800,  "depth": 400,  "height": 1800, "symbol": "制S2",   "note": "ソース側コード[S-制御盤]。S-104(コード[S-用])と並列管理" },
+    { "id": "K-019", "name": "定温式スポット型感知器(防爆型・P型)", "category": "K", "placement": "ceiling", "shape": "circle", "width": 100, "depth": 100, "height": 50, "symbol": "防爆P", "note": "ソース側コード[K-P_防爆型]。K-003(コード[K-E_防爆型])と並列管理" },
+    { "id": "K-217", "name": "避難口誘導灯(K-避難口誘導灯型)", "category": "K", "placement": "wall", "shape": "rect", "width": 400, "depth": 150, "height": 200, "symbol": "→出2", "note": "ソース側コード[K-避難口誘導灯]。K-210(コード[K-10])と並列管理" }
   ]
 }

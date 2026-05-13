@@ -822,6 +822,27 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
               <span className="label">記号</span>
               <span className="value">{spec.symbol}</span>
             </div>
+            {/* §M144 v0.33: note は出典コード / 注意事項などの補足情報。薄い文字で表示 */}
+            {spec.note != null && spec.note.length > 0 && (
+              <div
+                className="property-row"
+                data-testid="property-equipment-note"
+                style={{ alignItems: 'flex-start' }}
+              >
+                <span className="label">備考</span>
+                <span
+                  className="value"
+                  style={{
+                    color: 'var(--gray-500)',
+                    fontSize: 11,
+                    lineHeight: 1.4,
+                    whiteSpace: 'normal',
+                  }}
+                >
+                  {spec.note}
+                </span>
+              </div>
+            )}
           </>
         )}
         <div className="property-row">
