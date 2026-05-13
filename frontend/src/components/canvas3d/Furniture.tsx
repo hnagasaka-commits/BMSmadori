@@ -188,11 +188,27 @@ function SpecMesh({
     e.stopPropagation()
     select({ kind: 'furniture', id })
     setOrbitEnabled(false)
-    const hit = e.ray.intersectPlane(dragPlane.current, new THREE.Vector3())
     const g = groupRef.current
-    if (hit != null && g != null) {
+    if (g == null) return
+    // §M148 v0.34: ドラッグ平面を **設備の現在の Y 高さ** に合わせる。
+    //   旧実装: 常に Y=0 (床) でレイ交差していたため、天井/壁/屋根設備のドラッグで
+    //   視差ズレが発生 (カメラを傾けると掴んだ点と離れた位置に飛ぶ)。
+    //   normal=(0,1,0), constant=-y で `y=Y` の平面になる。
+    dragPlane.current.set(new THREE.Vector3(0, 1, 0), -g.position.y)
+    const hit = e.ray.intersectPlane(dragPlane.current, new THREE.Vector3())
+    if (hit != null) {
       dragOffset.current = { x: hit.x - g.position.x, z: hit.z - g.position.z }
       setIsDragging(true)
+      // §M148 v0.34: ポインターキャプチャでカーソルがメッシュ外に出ても
+      //   pointermove / pointerup を捕まえる。これが無いとドラッグ中に
+      //   別 mesh の上を通った瞬間にイベントが取りこぼされ、見かけ上
+      //   "張り付いて動かない" / "離した瞬間に元位置に戻る" バグになる。
+      try {
+        ;(e.target as Element & { setPointerCapture: (id: number) => void })
+          .setPointerCapture?.(e.pointerId)
+      } catch {
+        // 環境によっては target が capture を持たない (XR 等)
+      }
     }
   }
   function onPointerMove(e: ThreeEvent<PointerEvent>) {
@@ -203,7 +219,7 @@ function SpecMesh({
     g.position.x = hit.x - dragOffset.current.x
     g.position.z = hit.z - dragOffset.current.z
   }
-  function onPointerUp() {
+  function onPointerUp(e: ThreeEvent<PointerEvent>) {
     if (dragOffset.current == null) {
       setOrbitEnabled(true)
       return
@@ -219,6 +235,12 @@ function SpecMesh({
     dragOffset.current = null
     setIsDragging(false)
     setOrbitEnabled(true)
+    try {
+      ;(e.target as Element & { releasePointerCapture: (id: number) => void })
+        .releasePointerCapture?.(e.pointerId)
+    } catch {
+      // 同上
+    }
   }
 
   // spec.width / depth / height + scale (X, Y, Z)
@@ -270,9 +292,11 @@ function SpecMesh({
           />
         </mesh>
       )}
-      {/* §M142 v0.32: 選択時に設備名 + シンボルを HTML オーバーレイで 3D 上に浮かべる。
+      {/* §M142 v0.32 / §M148 v0.34: 選択時のみ設備名 + シンボルを HTML オーバーレイで浮かべる。
+          ドラッグ中 (isDragging) は出さない: <Html> のポータル更新が
+          group の imperative position mutation と競合して "動きが飛ぶ" 不具合の一因となるため。
           ホテルの「客室1」のように同じカタログ ID が大量にある場合の識別を容易にする。 */}
-      {highlighted && (
+      {isSelected && !isDragging && (
         <Html
           position={[0, h * MM_TO_M / 2 + 0.15, 0]}
           center
@@ -357,9 +381,12 @@ function FurnitureInstanceMesh({
     e.stopPropagation()
     select({ kind: 'furniture', id })
     setOrbitEnabled(false)
-    const hit = projectToXZ(e, new THREE.Vector3())
     const g = groupRef.current
-    if (hit != null && g != null) {
+    if (g == null) return
+    // §M148 v0.34: ドラッグ平面を現在の group Y に合わせる (天井設備の視差ズレ対策)
+    dragPlane.current.set(new THREE.Vector3(0, 1, 0), -g.position.y)
+    const hit = projectToXZ(e, new THREE.Vector3())
+    if (hit != null) {
       dragOffset.current = {
         x: hit.x - g.position.x,
         z: hit.z - g.position.z,

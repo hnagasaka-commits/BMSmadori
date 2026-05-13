@@ -259,7 +259,8 @@ function CameraRig({
   //   - keydown/keyup でキー状態を Set に保持
   //   - useFrame で毎フレーム camera.position を delta * speed だけ更新 (連続)
   //   - moveHuman は「キーがすべて離されたフレーム」だけ呼ぶ (Undo の肥大化防止)
-  //   - 通常 1.4 m/s (歩行)、Shift で 5× (= 7 m/s ダッシュ)
+  //   - §M147 v0.34: 通常 2.4 m/s (早歩き)、Shift で約 3.75× (= 9 m/s ダッシュ)
+  //     旧 1.4 / 7.0 だと「BMS 点検でフロア端まで移動が遅い」というフィードバックで増速
   const keysHeldRef = useRef<Set<string>>(new Set<string>())
   const needsHumanSyncRef = useRef(false)
   // camera を ref に固定して useFrame での mutation を react-hooks/immutability 警告から外す
@@ -334,7 +335,7 @@ function CameraRig({
     const right = new THREE.Vector3()
       .crossVectors(forward, new THREE.Vector3(0, 1, 0))
       .normalize()
-    const baseSpeed = keys.has('shift') ? 7.0 : 1.4
+    const baseSpeed = keys.has('shift') ? 9.0 : 2.4
     const step = baseSpeed * delta
     cam.position.x += forward.x * -dz * step + right.x * dx * step
     cam.position.z += forward.z * -dz * step + right.z * dx * step

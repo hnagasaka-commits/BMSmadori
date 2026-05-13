@@ -25,6 +25,7 @@ import type { Door, Floor, Floorplan, FurnitureInstance, Room, Wall, Window } fr
 import { shapeAabb, shapeVertices } from '@/core/geometry'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
 import { getPreset } from '@/data/roomPresets'
+import { useEquipmentMasterStore } from '@/store/equipmentMasterStore'
 
 const WALL_LAYER = 'WALL'
 const ROOM_LAYER = 'ROOM'
@@ -223,6 +224,23 @@ function appendWindowMark(
   out.push('40', dxfNum(win.width / 2))
 }
 
+/**
+ * §M149 v0.34: 家具 / 設備の **2D 図面** を DXF に書き込む。
+ *
+ * 旧仕様 (〜v0.33): INSERT 1 件のみ。配置点だけで形が見えなかった。
+ * 新仕様: 設備の実寸 (width × depth) と shape (rect/square/circle) を DXF 要素として
+ * 書き出すため、外部 CAD で開いた瞬間に「どこに何があるか」が視覚的に把握できる。
+ *
+ * 書き出し内容:
+ *  1. LWPOLYLINE (rect/square) または CIRCLE (circle) — 設備外形 (回転反映)
+ *  2. TEXT — シンボル (例: "[消栓]", "S光"...) を中央に
+ *  3. INSERT — block 参照を 1 件 (importDxfText が picks up 用)
+ *
+ * レイヤー名:
+ *  - equipment-master 由来 (E-001 等): catalogId をそのままレイヤー名 (= 旧 CAD 互換)
+ *  - 旧 BMS catalog (ceiling-light-led 等): CATALOG_TO_LAYER で BMS の慣習名にマップ
+ *  - その他家具 (sofa 等): FURNITURE レイヤー
+ */
 function appendFurnitureInsert(
   out: string[],
   fi: FurnitureInstance,
@@ -230,15 +248,132 @@ function appendFurnitureInsert(
   ty: (y: number) => number,
 ): void {
   const entry = getCatalogEntry(fi.catalogId)
-  if (entry == null) return
-  const layer = CATALOG_TO_LAYER[fi.catalogId] ?? FURNITURE_LAYER
-  // INSERT (block 定義無しで position だけ出す)
+  const spec = entry == null
+    ? useEquipmentMasterStore.getState().byId.get(fi.catalogId)
+    : undefined
+  if (entry == null && spec == null) return
+
+  // レイヤー: spec があれば catalogId をそのまま使う (E-001 等)、無ければ CATALOG_TO_LAYER
+  const layer =
+    spec != null
+      ? fi.catalogId
+      : (CATALOG_TO_LAYER[fi.catalogId] ?? FURNITURE_LAYER)
+
+  // 2D footprint (mm) を取得
+  let w: number
+  let d: number
+  let isCircle = false
+  let symbol = ''
+  if (spec != null) {
+    w = spec.width
+    d = spec.depth
+    isCircle = spec.shape === 'circle'
+    symbol = spec.symbol
+  } else if (entry != null) {
+    const aabb = pieceAabbXZ(entry.pieces)
+    if (aabb == null) return
+    w = aabb.maxX - aabb.minX
+    d = aabb.maxZ - aabb.minZ
+  } else {
+    return
+  }
+
+  // (1) 設備外形を DXF 要素として書き出す
+  if (isCircle) {
+    out.push('0', 'CIRCLE')
+    out.push('8', layer)
+    out.push('10', dxfNum(tx(fi.position[0])))
+    out.push('20', dxfNum(ty(fi.position[1])))
+    out.push('40', dxfNum(Math.max(w, d) / 2))
+  } else {
+    // 回転矩形: 4 隅をローカル → 回転 → world → DXF 変換
+    const corners = rotatedRectCorners(
+      fi.position[0],
+      fi.position[1],
+      w,
+      d,
+      fi.rotation,
+    )
+    out.push('0', 'LWPOLYLINE')
+    out.push('8', layer)
+    out.push('90', '4')
+    out.push('70', '1') // closed
+    for (const [cx, cy] of corners) {
+      out.push('10', dxfNum(tx(cx)))
+      out.push('20', dxfNum(ty(cy)))
+    }
+  }
+
+  // (2) シンボルを中央に TEXT で書く (高さ 200mm)
+  if (symbol.length > 0) {
+    out.push('0', 'TEXT')
+    out.push('8', layer)
+    out.push('10', dxfNum(tx(fi.position[0])))
+    out.push('20', dxfNum(ty(fi.position[1])))
+    out.push('40', '200')
+    out.push('1', escapeDxfText(symbol))
+  }
+
+  // (3) INSERT も並置 (importDxfText が equipment 検出に使う互換マーカー)
   out.push('0', 'INSERT')
   out.push('8', layer)
   out.push('2', fi.catalogId.toUpperCase().replace(/[^A-Z0-9_-]/g, '_'))
   out.push('10', dxfNum(tx(fi.position[0])))
   out.push('20', dxfNum(ty(fi.position[1])))
-  out.push('50', dxfNum((fi.rotation * 180) / Math.PI))
+  // DXF の回転は度数法、Y 反転の関係で 2D rotation 符号を反転
+  out.push('50', dxfNum((-fi.rotation * 180) / Math.PI))
+}
+
+/**
+ * §M149 v0.34: plan-XY の中心 (cx, cy) + 寸法 (w × d) + 回転 (rad) → 4 隅の plan-XY。
+ * Floorplan の rotation は 3D の Y 軸まわり (rad)、plan view では時計回りに見える。
+ * ローカル座標 (dx, dy) は -w/2..+w/2, -d/2..+d/2 の矩形。
+ * (cos, sin) で回して、ワールド XY を返す。
+ */
+function rotatedRectCorners(
+  cx: number,
+  cy: number,
+  w: number,
+  d: number,
+  rotation: number,
+): Array<readonly [number, number]> {
+  const cos = Math.cos(rotation)
+  const sin = Math.sin(rotation)
+  const hw = w / 2
+  const hd = d / 2
+  const local: ReadonlyArray<readonly [number, number]> = [
+    [-hw, -hd],
+    [hw, -hd],
+    [hw, hd],
+    [-hw, hd],
+  ]
+  return local.map(([dx, dy]) => [
+    cx + dx * cos - dy * sin,
+    cy + dx * sin + dy * cos,
+  ])
+}
+
+/** entry.pieces から XZ 平面 AABB を計算 (catalog 由来家具向け) */
+function pieceAabbXZ(
+  pieces: ReadonlyArray<{
+    position: readonly [number, number, number]
+    size: readonly [number, number, number]
+  }>,
+): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+  if (pieces.length === 0) return null
+  let minX = Infinity
+  let maxX = -Infinity
+  let minZ = Infinity
+  let maxZ = -Infinity
+  for (const p of pieces) {
+    const [px, , pz] = p.position
+    const [sx, , sz] = p.size
+    minX = Math.min(minX, px - sx / 2)
+    maxX = Math.max(maxX, px + sx / 2)
+    minZ = Math.min(minZ, pz - sz / 2)
+    maxZ = Math.max(maxZ, pz + sz / 2)
+  }
+  return { minX, maxX, minZ, maxZ }
 }
 
 function appendCeilingNote(

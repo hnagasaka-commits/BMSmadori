@@ -261,4 +261,49 @@ describe('exportFloorplanToDxf', () => {
     const floorOnRound = roundFloor.furniture.find((f) => f.catalogId === 'fire-extinguisher')
     expect(floorOnRound?.mountTo).toBe('floor')
   })
+
+  it('§M149 v0.34: DXF 出力に設備の 2D 図形 (LWPOLYLINE/CIRCLE) + ラベルが含まれる', () => {
+    // 円形設備 (ceiling-light-led は square だが既存マッピング)
+    const base = createEmptyFloorplan()
+    const floor = base.floors[0]!
+    const plan: Floorplan = {
+      ...base,
+      floors: [
+        {
+          ...floor,
+          rooms: [
+            {
+              id: 'r1',
+              presetId: 'office',
+              shape: {
+                kind: 'rect',
+                x: 0,
+                y: 0,
+                w: 4000,
+                h: 3000,
+                edgeIds: ['e1', 'e2', 'e3', 'e4'],
+              },
+              rotation: 0,
+            },
+          ],
+          furniture: [
+            {
+              id: 'eq1',
+              catalogId: 'ceiling-light-led',
+              position: [1000, 1500],
+              rotation: 0,
+              mountTo: 'ceiling',
+            },
+          ],
+        },
+      ],
+    }
+    const dxf = exportFloorplanToDxf(plan)
+    // LWPOLYLINE (= 設備外形) が含まれる
+    expect(dxf).toContain('LWPOLYLINE')
+    // 旧来の INSERT も残ること (再 import 互換)
+    expect(dxf).toContain('INSERT')
+    // 設備のレイヤー名 (E-LIGHT 慣習名) が含まれる
+    expect(dxf).toContain('E-LIGHT')
+  })
 })
