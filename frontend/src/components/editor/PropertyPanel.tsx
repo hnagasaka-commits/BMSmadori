@@ -13,6 +13,7 @@ import { useEditorStore } from '@/store/editorStore'
 import { ROOM_PRESETS, getPreset } from '@/data/roomPresets'
 import { areaToDisplayUnits, shapeArea } from '@/core/geometry'
 import { getCatalogEntry } from '@/data/furnitureCatalog'
+import { useEquipmentMasterStore } from '@/store/equipmentMasterStore'
 import { listSashCatalog } from '@/data/sashCatalog'
 import type { WallType, WindowType } from '@/types'
 import { furnitureScale3 } from '@/types'
@@ -99,6 +100,11 @@ export function PropertyPanel() {
 
   void clearSelection
   return <EmptyPanel message="この要素のプロパティは Phase 1 では未実装です" />
+}
+
+/** §M140 v0.32: placement → 日本語ラベル */
+function placementLabel(p: 'ceiling' | 'floor' | 'wall' | 'roof' | 'outdoor'): string {
+  return { ceiling: '天井', floor: '床', wall: '壁', roof: '屋上', outdoor: '屋外' }[p]
 }
 
 function EmptyPanel({ message }: { message: string }) {
@@ -779,6 +785,12 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
 
   if (fi == null) return null
   const entry = getCatalogEntry(fi.catalogId)
+  // §M140 v0.32: 設備マスター由来の catalogId は getCatalogEntry が null を返す。
+  // この場合は EquipmentSpec から名称・分類を引いて表示する (= タップで設備名が見える)。
+  const spec = entry == null
+    ? useEquipmentMasterStore.getState().byId.get(fi.catalogId)
+    : undefined
+  const displayName = entry?.displayName ?? spec?.name ?? fi.catalogId
   // §M69 v0.12: scale を 3 軸 [x, y, z] に正規化。slider は 0.2〜3.0 の範囲。
   const scale3 = furnitureScale3(fi.scale)
   const setAxis = (axis: 0 | 1 | 2, v: number) => {
@@ -790,14 +802,31 @@ function FurnitureProperties({ furnitureId }: { furnitureId: string }) {
   return (
     <section className="editor-properties" data-testid="property-panel">
       <div className="property-section">
-        <h3>家具</h3>
+        {/* §M140 v0.32: 見出しは「家具」または「設備」を spec の有無で出し分け */}
+        <h3>{spec != null ? '設備' : '家具'}</h3>
         <div className="property-row">
           <span className="label">名称</span>
-          <span className="value">{entry?.displayName ?? fi.catalogId}</span>
+          <span className="value" data-testid="property-furniture-name">{displayName}</span>
         </div>
+        {spec != null && (
+          <>
+            <div className="property-row">
+              <span className="label">分類</span>
+              <span className="value">{spec.category} / {placementLabel(spec.placement)}</span>
+            </div>
+            <div className="property-row">
+              <span className="label">寸法 (W×D×H)</span>
+              <span className="value">{spec.width} × {spec.depth} × {spec.height} mm</span>
+            </div>
+            <div className="property-row">
+              <span className="label">記号</span>
+              <span className="value">{spec.symbol}</span>
+            </div>
+          </>
+        )}
         <div className="property-row">
           <span className="label">カタログ ID</span>
-          <span className="value">{fi.catalogId}</span>
+          <span className="value" style={{ color: 'var(--gray-500)', fontSize: 11 }}>{fi.catalogId}</span>
         </div>
       </div>
 

@@ -39,8 +39,16 @@ export type EquipmentMasterFile = {
   metadata: {
     version: string
     unit: 'mm'
-    categoryColors: Record<EquipmentCategory, { name: string; color: string }>
+    /** §M141 v0.32: ファイル全体の説明 (UI には出さない、メタ情報) */
+    description?: string
+    categoryColors: Record<
+      EquipmentCategory,
+      { name: string; color: string; label?: string }
+    >
     placementColors: Record<EquipmentPlacement, string>
+    /** §M141 v0.32: 許容される shape / placement の一覧 (バリデーション用、UI 凡例用) */
+    shapes?: EquipmentShape[]
+    placements?: EquipmentPlacement[]
   }
   equipment: EquipmentSpec[]
 }

@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import type { ThreeEvent } from '@react-three/fiber'
+import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Floor } from '@/types'
 import { furnitureScale3 } from '@/types'
@@ -268,6 +269,34 @@ function SpecMesh({
             emissiveIntensity={highlighted ? 0.3 : 0}
           />
         </mesh>
+      )}
+      {/* §M142 v0.32: 選択時に設備名 + シンボルを HTML オーバーレイで 3D 上に浮かべる。
+          ホテルの「客室1」のように同じカタログ ID が大量にある場合の識別を容易にする。 */}
+      {highlighted && (
+        <Html
+          position={[0, h * MM_TO_M / 2 + 0.15, 0]}
+          center
+          distanceFactor={8}
+          style={{ pointerEvents: 'none' }}
+        >
+          <div
+            data-testid={`spec-label-${id}`}
+            style={{
+              padding: '4px 8px',
+              background: 'rgba(15, 23, 42, 0.92)',
+              color: 'white',
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              border: `2px solid ${color}`,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+            }}
+          >
+            <span style={{ marginRight: 6, fontSize: 13 }}>{spec.symbol}</span>
+            {spec.name}
+          </div>
+        </Html>
       )}
     </group>
   )
