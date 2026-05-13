@@ -314,6 +314,47 @@ describe('exportFloorplanToDxf', () => {
     expect(placed?.mountTo).toBe('ceiling')
   })
 
+  it('§M153 v0.36: 日本語 TEXT 値が \\U+XXXX エスケープされ、再 import で復元できる', () => {
+    const base = createEmptyFloorplan()
+    const floor = base.floors[0]!
+    const plan: Floorplan = {
+      ...base,
+      floors: [
+        {
+          ...floor,
+          rooms: [
+            {
+              id: 'r1',
+              presetId: 'living',
+              customName: '会議室α',
+              shape: {
+                kind: 'rect',
+                x: 0,
+                y: 0,
+                w: 3000,
+                h: 3000,
+                edgeIds: ['e1', 'e2', 'e3', 'e4'],
+              },
+              rotation: 0,
+            },
+          ],
+        },
+      ],
+    }
+    const dxf = exportFloorplanToDxf(plan)
+    // 日本語文字はすべて \U+XXXX 形式に置換されている (生の日本語は含まれない)
+    expect(dxf).not.toContain('会議室')
+    expect(dxf).toContain('\\U+4F1A') // 会
+    expect(dxf).toContain('\\U+8B70') // 議
+    expect(dxf).toContain('\\U+5BA4') // 室
+    expect(dxf).toContain('\\U+03B1') // α (ギリシャ文字も escape される)
+    // AC1021 (R2007) でファイルが宣言される
+    expect(dxf).toContain('AC1021')
+    // round-trip で復元
+    const { floorplan: round } = importDxfText(dxf)
+    expect(round.floors[0]!.rooms[0]!.customName).toBe('会議室α')
+  })
+
   it('§M149 v0.34: DXF 出力に設備の 2D 図形 (LWPOLYLINE/CIRCLE) + ラベルが含まれる', () => {
     // 円形設備 (ceiling-light-led は square だが既存マッピング)
     const base = createEmptyFloorplan()

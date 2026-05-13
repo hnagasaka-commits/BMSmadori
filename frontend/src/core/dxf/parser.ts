@@ -232,7 +232,7 @@ function buildEntity(
     case 'TEXT': {
       const x = readNum(attrs, 10)
       const y = readNum(attrs, 20)
-      const value = readStr(attrs, 1) ?? ''
+      const value = decodeDxfText(readStr(attrs, 1) ?? '')
       const height = readNum(attrs, 40) ?? 0
       const rotation = (readNum(attrs, 50) ?? 0) * (Math.PI / 180)
       if (x == null || y == null) return null
@@ -247,7 +247,7 @@ function buildEntity(
         if (a.code === 3) chunks.push(a.value)
         else if (a.code === 1) chunks.push(a.value)
       }
-      const value = chunks.join('').replace(/\\P/g, '\n')
+      const value = decodeDxfText(chunks.join('').replace(/\\P/g, '\n'))
       const height = readNum(attrs, 40) ?? 0
       const rotation = (readNum(attrs, 50) ?? 0) * (Math.PI / 180)
       if (x == null || y == null) return null
@@ -310,4 +310,21 @@ function readStr(
     if (a.code === code) return a.value
   }
   return null
+}
+
+/**
+ * §M153 v0.36: DXF の TEXT/MTEXT 内 `\U+XXXX` エスケープを Unicode 文字に復元する。
+ *
+ * AutoCAD 互換 CAD ソフトが日本語等の非 ASCII を `\U+30EA\U+30D3...` のように
+ * 出力する慣習がある。本アプリ exporter (§M153) もこの形式で書き出すため、
+ * 取込時に復元することで round-trip 完全一致が成立する。
+ *
+ * - `\U+XXXX` × 2 で BMP 外 (絵文字など) のサロゲートペアにも対応
+ * - エスケープ以外の `\` は素通し
+ */
+function decodeDxfText(s: string): string {
+  if (s.indexOf('\\U+') < 0) return s
+  return s.replace(/\\U\+([0-9A-Fa-f]{4})/g, (_, hex: string) =>
+    String.fromCharCode(parseInt(hex, 16)),
+  )
 }

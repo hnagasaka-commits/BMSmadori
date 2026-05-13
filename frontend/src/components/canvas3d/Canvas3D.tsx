@@ -34,6 +34,7 @@ import {
   WALL_MATERIAL,
   WINDOW_GLASS_MATERIAL,
 } from './materials'
+import { FpvMiniMap } from './FpvMiniMap'
 import { Furniture } from './Furniture'
 import { Humans } from './Humans'
 import { pickFloorTextureKind } from './proceduralTextures'
@@ -191,6 +192,8 @@ export function Canvas3D() {
       <FpvHud />
       {/* §M103 v0.23: 視線方向を示すクロスヘア (FPV 中のみ表示) */}
       <FpvCrosshair />
+      {/* §M154 v0.36: FPV 中のミニマップ (画面右上、間取り図 + 現在地) */}
+      <FpvMiniMap />
     </div>
   )
 }
@@ -303,6 +306,11 @@ function CameraRig({
     }
   }, [fpvHumanId])
 
+  // §M154 v0.36: FPV カメラ位置を editorStore にミラーする (FpvMiniMap 用)。
+  // 10 Hz に間引きしてストア更新する (60 fps で毎フレーム set すると React 再レンダー過多)。
+  const setFpvCamera = useEditorStore((s) => s.setFpvCamera)
+  const lastSyncTimeRef = useRef(0)
+
   useFrame((_state, delta) => {
     if (fpvHumanId == null) return
     const cam = cameraRef.current
@@ -314,6 +322,21 @@ function CameraRig({
     if (keys.has('arrowdown') || keys.has('s')) dz += 1
     if (keys.has('arrowleft') || keys.has('a')) dx -= 1
     if (keys.has('arrowright') || keys.has('d')) dx += 1
+    // §M154 v0.36: 移動の有無に関わらず、画面右上のミニマップ用にカメラ XZ + Yaw を
+    // 10Hz でストアに反映。毎フレーム更新だと React 再レンダー数が膨大になるので throttle。
+    lastSyncTimeRef.current += delta
+    if (lastSyncTimeRef.current >= 0.1) {
+      lastSyncTimeRef.current = 0
+      const xMm = Math.round(cam.position.x * 1000)
+      const zMm = Math.round(cam.position.z * 1000)
+      const forwardForYaw = new THREE.Vector3()
+      cam.getWorldDirection(forwardForYaw)
+      // Y 軸まわりの yaw: forward が (sin, cos) になるよう atan2 で計算
+      // 3D 座標系: 北 (画面奥) = -Z 方向、東 = +X 方向、Yaw=0 を北向きとする
+      const yaw = Math.atan2(forwardForYaw.x, -forwardForYaw.z)
+      // フロアインデックスは現状複数階の判定ロジックがないので 0 固定 (Phase 3 後半で多階対応)
+      setFpvCamera([xMm, zMm], yaw, 0)
+    }
     if (dx === 0 && dz === 0) {
       // すべて離された瞬間に 1 回だけ moveHuman を呼ぶ (Undo を 1 段だけ消費)
       if (needsHumanSyncRef.current) {

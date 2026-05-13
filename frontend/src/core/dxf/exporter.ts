@@ -71,8 +71,13 @@ export function exportFloorplanToDxf(floorplan: Floorplan): string {
 function pushHeader(out: string[]): void {
   out.push('0', 'SECTION')
   out.push('2', 'HEADER')
+  // §M153 v0.36: バージョンを AC1009 (R12) → AC1021 (R2007) に引き上げ。
+  //   R2007 以降は UTF-8 をネイティブサポートするので、日本語 TEXT がそのまま読める
+  //   CAD ソフト (AutoCAD 2007+, BricsCAD, LibreCAD など) が増える。
+  //   加えて escapeDxfText で \U+XXXX 形式に escape するので、R12 互換 CAD でも
+  //   文字化けせず復元される (二重防衛)。
   out.push('9', '$ACADVER')
-  out.push('1', 'AC1009')
+  out.push('1', 'AC1021')
   out.push('9', '$INSUNITS')
   out.push('70', '4') // 4 = mm
   out.push('0', 'ENDSEC')
@@ -410,9 +415,51 @@ function dxfNum(n: number): string {
   return n.toFixed(4)
 }
 
+/**
+ * §M153 v0.36: DXF TEXT のエスケープ (日本語文字化け対策)。
+ *
+ * 問題: 旧実装は UTF-8 文字をそのまま書き出していたため、AC1009 (R12) や
+ *   システム codepage が Shift-JIS の Windows AutoCAD で開くと日本語が
+ *   文字化けしていた。
+ *
+ * 解決:
+ *   1. 非 ASCII 文字 (codepoint ≥ 128) はすべて `\U+XXXX` のエスケープに置換。
+ *      これは AutoCAD/BricsCAD/LibreCAD など主要 CAD で共通サポートされる
+ *      Unicode 表現で、ファイルのエンコーディングに依らず正しく解釈される。
+ *   2. BMP 範囲外 (U+10000 以降、絵文字など) はサロゲートペアに分割して書き出す
+ *      (DXF \U+ は 4 桁 hex のみ受ける実装が多いため)。
+ *   3. 改行・制御文字はスペースに置換 / 除去。
+ *   4. `^` は `^^` にエスケープ (DXF キャレット記法対策)。
+ */
 function escapeDxfText(s: string): string {
-  // DXF TEXT は基本そのまま。改行と特殊記号だけエスケープ
-  return s.replace(/\r?\n/g, ' ').replace(/\^/g, '^^')
+  let out = ''
+  for (const ch of s) {
+    const code = ch.codePointAt(0)!
+    if (code === 0x0a || code === 0x0d) {
+      // 改行 → スペース
+      out += ' '
+    } else if (code < 0x20) {
+      // その他制御文字 → 除去
+      continue
+    } else if (code === 0x5e /* ^ */) {
+      out += '^^'
+    } else if (code < 0x80) {
+      // ASCII printable
+      out += ch
+    } else if (code <= 0xffff) {
+      // BMP: 単一の \U+XXXX
+      out += '\\U+' + code.toString(16).toUpperCase().padStart(4, '0')
+    } else {
+      // BMP 外 (絵文字など): サロゲートペアに分割して 2 つの \U+ を出す
+      const offset = code - 0x10000
+      const hi = 0xd800 + (offset >> 10)
+      const lo = 0xdc00 + (offset & 0x3ff)
+      out +=
+        '\\U+' + hi.toString(16).toUpperCase().padStart(4, '0') +
+        '\\U+' + lo.toString(16).toUpperCase().padStart(4, '0')
+    }
+  }
+  return out
 }
 
 function computeFloorplanBbox(plan: Floorplan): {

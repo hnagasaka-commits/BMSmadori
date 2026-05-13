@@ -119,6 +119,16 @@ export type EditorState = {
    */
   fpvHumanId: string | null
   /**
+   * §M154 v0.36: FPV 中のカメラ XZ 位置 (mm)。null は FPV 非起動。
+   * Canvas3D の useFrame で約 10Hz に間引いて更新。
+   * FpvMiniMap (画面右上の小さな間取り図) が「現在地」をプロットするのに使う。
+   */
+  fpvCameraXZ: readonly [number, number] | null
+  /** §M154 v0.36: FPV カメラの Y 軸回転 (rad)。北 (画面上) が 0、時計回り正 */
+  fpvCameraYaw: number
+  /** §M154 v0.36: FPV カメラが乗っている階のインデックス (0=1F)。null なら未確定 */
+  fpvCameraFloorIndex: number | null
+  /**
    * §M97 v0.21: 3D 上の屋根スタイル。
    *  - 'none'  : 屋根なし (旧挙動)
    *  - 'flat'  : 平らな陸屋根
@@ -177,6 +187,12 @@ export type EditorState = {
   /** §M78 v0.14: 一人称視点モードに入る/抜ける */
   enterFpv: (humanId: string) => void
   exitFpv: () => void
+  /** §M154 v0.36: FPV 中のカメラ位置をストアに反映 (useFrame から throttle して呼ぶ) */
+  setFpvCamera: (
+    xz: readonly [number, number],
+    yaw: number,
+    floorIndex: number | null,
+  ) => void
   /** §M97 v0.21: 屋根スタイルを切替 */
   setRoofStyle: (style: 'none' | 'flat' | 'gable' | 'shed') => void
   /** §M99 v0.22: 3D の表示対象階を設定 (null=全階表示) */
@@ -221,6 +237,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   viewMode: '2d',
   lightingPreset: 'noon',
   fpvHumanId: null,
+  fpvCameraXZ: null,
+  fpvCameraYaw: 0,
+  fpvCameraFloorIndex: null,
   roofStyle: 'none',
   visibleFloorIndex: null,
   layerMode: 'floor',
@@ -260,7 +279,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setViewMode: (viewMode) => set({ viewMode }),
   setLightingPreset: (lightingPreset) => set({ lightingPreset }),
   enterFpv: (humanId) => set({ fpvHumanId: humanId }),
-  exitFpv: () => set({ fpvHumanId: null }),
+  exitFpv: () =>
+    set({
+      fpvHumanId: null,
+      fpvCameraXZ: null,
+      fpvCameraYaw: 0,
+      fpvCameraFloorIndex: null,
+    }),
+  setFpvCamera: (xz, yaw, floorIndex) =>
+    set({ fpvCameraXZ: xz, fpvCameraYaw: yaw, fpvCameraFloorIndex: floorIndex }),
   setRoofStyle: (roofStyle) => set({ roofStyle }),
   setVisibleFloorIndex: (visibleFloorIndex) => set({ visibleFloorIndex }),
   setLayerMode: (layerMode) => set({ layerMode }),
